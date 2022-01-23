@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from data_processor import raw_data_processor,sequence_producer,nn_setup
 from lstm import lstm_predictor
+import numpy as np
 
 
 def main():
@@ -8,6 +9,8 @@ def main():
     template_storage,sequence_storage=raw_data_processor('../data/pg_log/postgresql-4.log')
     sequence_list=sequence_producer(len(template_storage),sequence_storage)
     feature_sequences, label_sequence=nn_setup(sequence_list)
+    feature_sequences=np.array(feature_sequences)
+    label_sequence=np.array(label_sequence)
     lstm_predictor(feature_sequences, label_sequence)
 
 
