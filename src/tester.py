@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-from ML4DB.src.data_processor import raw_data_processor,sequence_producer,nn_setup
-from ML4DB.src.lstm import lstm_predictor
+from data_processor import raw_data_processor,sequence_producer,nn_setup
+from lstm import lstm_predictor
 
 
 def main():

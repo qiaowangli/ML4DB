@@ -1,0 +1,5 @@
+2022-01-22 00:12:47 PST [33]: [46] WARNING:  could not open statistics file "pg_stat_tmp/global.stat": Operation not permitted
+2022-01-22 00:18:17 PST [33]: [47] WARNING:  could not open statistics file "pg_stat_tmp/global.stat": Operation not permitted
+2022-01-22 00:22:17 PST [1864]: [1] WARNING:  could not open statistics file "pg_stat_tmp/global.stat": Operation not permitted
+2022-01-22 00:28:17 PST [1876]: [1] WARNING:  could not open statistics file "pg_stat_tmp/global.stat": Operation not permitted
+2022-01-22 00:47:17 PST [33]: [48] WARNING:  could not open statistics file "pg_stat_tmp/global.stat": Operation not permitted
