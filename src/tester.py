@@ -6,7 +6,7 @@ import numpy as np
 
 def main():
 
-    template_storage,sequence_storage=raw_data_processor('../data/pg_log/postgresql-4.log')
+    template_storage,sequence_storage=raw_data_processor('../MLDB/data/pg_log/postgresql-1.log')
     sequence_list=sequence_producer(len(template_storage),sequence_storage)
     feature_sequences, label_sequence=nn_setup(sequence_list)
     feature_sequences=np.array(feature_sequences)
