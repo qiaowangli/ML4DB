@@ -32,6 +32,6 @@ def lstm_predictor(feature_sequences, label_sequence):
     lstm_model.fit(x_train, y_train, epochs=10)
 
     # now lets validate our model
-    lstm_model.evaluate(x_test,y_test)
+    return lstm_model.evaluate(x_test,y_test)
 
 
