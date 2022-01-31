@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from matplotlib import pyplot as plt
+#from matplotlib import pyplot as plt
 
 class performance_visualizer():
     def __init__(self):
@@ -15,6 +15,7 @@ class performance_visualizer():
             plt.xlabel("splitting interval")
             plt.ylabel("performance")
             plt.show()
+            pass
         else:
             print("the current length of plotting_list is 0")
 

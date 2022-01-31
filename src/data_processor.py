@@ -12,12 +12,12 @@ from datetime import datetime
 # distinct query templates falls below 200, clustering will not be activated.    #
 # Instead, One-to-hot would be used.                                             #
 ##################################################################################
-def raw_data_processor(log_path,splitting_mode,predict_interval=5):
+def raw_data_processor(log_path,splitting_mode="time",predict_interval=5):
     """
-    @input parameters:  log_path         -> log_file path, 
-                        predict_interval -> furture interval to predict
+    @input parameters:  log_path         -> log_file path
                         splitting_mode   -> splitting_mode decides the way to split the queries
-
+                        predict_interval -> furture interval to predict
+                        
     @output: template_storage -> A dictionary that contains all distint queries and their distint ID.
              sequence_storage -> A dictionary contains a set of timestamps, where each timestamp records the frequency of query IDs executed during the timestamp period.
     """
