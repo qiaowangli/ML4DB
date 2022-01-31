@@ -12,7 +12,7 @@ from datetime import datetime
 # distinct query templates falls below 200, clustering will not be activated.    #
 # Instead, One-to-hot would be used.                                             #
 ##################################################################################
-def raw_data_processor(log_path,predict_interval=5,splitting_mode='time'):
+def raw_data_processor(log_path,predict_interval=5,splitting_mode):
     """
     @input parameters:  log_path         -> log_file path, 
                         predict_interval -> furture interval to predict
