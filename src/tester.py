@@ -15,7 +15,7 @@ def main():
     """
     plotter=performance_visualizer() # create an plotting object
     for index_interval in range(1,40,3):
-      template_storage,sequence_storage=raw_data_processor('/content/postgresql-1.log',index_interval,'time')
+      template_storage,sequence_storage=raw_data_processor('/content/postgresql-1.log','time',index_interval)
       sequence_list=sequence_producer(len(template_storage),sequence_storage)
       feature_sequences, label_sequence=nn_setup(sequence_list)
       plotter.data_append(lstm_predictor(feature_sequences, label_sequence)[1])
