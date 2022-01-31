@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
-from ML4DB.src.data_processor import raw_data_processor,sequence_producer,nn_setup
-
+import numpy as np
 from keras import models, layers
 from keras.models import Sequential
 from keras.layers import Dense, LSTM, Dropout
@@ -9,6 +8,10 @@ from sklearn.model_selection import train_test_split
 
 
 def lstm_predictor(feature_sequences, label_sequence):
+    # convert to numpy array
+    feature_sequences=np.array(feature_sequences) 
+    label_sequence=np.array(label_sequence)
+
     x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequence, test_size=0.3, random_state=0)
 
     lstm_model = Sequential()

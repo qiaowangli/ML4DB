@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 import re
+from sys import stderr
 import time
 from datetime import datetime
 
@@ -11,10 +12,11 @@ from datetime import datetime
 # distinct query templates falls below 200, clustering will not be activated.    #
 # Instead, One-to-hot would be used.                                             #
 ##################################################################################
-def raw_data_processor(log_path,predict_interval=5):
+def raw_data_processor(log_path,predict_interval=5,splitting_mode="time"):
     """
     @input parameters:  log_path         -> log_file path, 
                         predict_interval -> furture interval to predict
+                        splitting_mode   -> splitting_mode decides the way to split the queries
 
     @output: template_storage -> A dictionary that contains all distint queries and their distint ID.
              sequence_storage -> A dictionary contains a set of timestamps, where each timestamp records the frequency of query IDs executed during the timestamp period.
@@ -23,10 +25,17 @@ def raw_data_processor(log_path,predict_interval=5):
     template_storage={} # dictionary contains all distint queries and their distint ID.
     sequence_storage={} # dictionary contains a set of timestamps, where each timestamp records the frequency of query IDs executed during the timestamp period.
     template_index=0 
-    # we first get the starting date-time of the log file
-    tracking_timestamp=int(time.mktime(datetime.strptime(log_file.readline().split('LOG:')[0].split(' PST')[0], "%Y-%m-%d %H:%M:%S").timetuple()))
-    # we create the dic for the first timestamp
-    sequence_storage[tracking_timestamp]={}
+    if splitting_mode =="time":
+        # we first get the starting date-time of the log file
+        tracking_timestamp=int(time.mktime(datetime.strptime(log_file.readline().split('LOG:')[0].split(' PST')[0], "%Y-%m-%d %H:%M:%S").timetuple()))
+        # we create the dic for the first timestamp
+        sequence_storage[tracking_timestamp]={}
+    elif splitting_mode =="query":
+        query_group_index=0
+        sequence_storage[query_group_index]={}
+    else:
+        print("Invalid splitting_mode, the system only supports 'time' and 'query' feature")
+        exit(-1)
     
     for line in log_file:
         try:
@@ -35,21 +44,31 @@ def raw_data_processor(log_path,predict_interval=5):
         except:
             continue
 
-        if query_timestamp not in sequence_storage and query_timestamp > tracking_timestamp+predict_interval:
+        if splitting_mode == "time" and query_timestamp not in sequence_storage and query_timestamp > tracking_timestamp+predict_interval:
             sequence_storage[query_timestamp]={}
             tracking_timestamp=query_timestamp
+        elif splitting_mode == "query" and sum(sequence_storage[query_group_index].values()) > predict_interval:
+            query_group_index+=1
+            sequence_storage[query_group_index]={} # create a new dictionary
+
 
         if template_query:
             new_template=re.sub('\d+', r'$$$', template_query[0][1]) 
             
+            # check if this is a new template
             if new_template not in template_storage:
                 template_storage[new_template]=template_index
                 template_index+=1
-            
-            if template_storage[new_template] not in sequence_storage[tracking_timestamp]:
-                sequence_storage[tracking_timestamp][template_storage[new_template]]=1
+            # the variable 'interval_id' is used to identify which sub_dictionary the system is working with.
+            interval_id=tracking_timestamp if splitting_mode == "time" else query_group_index
+
+            #record the queries 
+            if template_storage[new_template] not in sequence_storage[interval_id]:
+                sequence_storage[interval_id][template_storage[new_template]]=1
             else:
-                sequence_storage[tracking_timestamp][template_storage[new_template]]+=1
+                sequence_storage[interval_id][template_storage[new_template]]+=1
+
+
     return template_storage,sequence_storage
 
 def sequence_producer(templates_num,sequence_storage):
@@ -79,3 +98,4 @@ def nn_setup(sequence_list, time_step=10):
         label_sequence.append(sequence_list[ending_point+time_step])
         ending_point+=1
     return feature_sequences, label_sequence
+
