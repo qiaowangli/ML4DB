@@ -20,7 +20,7 @@ def main():
       feature_sequences, label_sequence=nn_setup(sequence_list)
       plotter.data_append(lstm_predictor(feature_sequences, label_sequence)[1])
     
-    plotter.plotting_list()
+    plotter.visual_plot()
 
 
 
