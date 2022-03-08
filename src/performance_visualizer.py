@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/Users/royli/miniforge3/envs/tensorflow_m1/bin/python3
 
 from matplotlib import pyplot as plt
 
