@@ -1,6 +1,7 @@
 #!/Users/royli/miniforge3/envs/tensorflow_m1/bin/python3
 import re
 import time
+import numpy as np
 from datetime import datetime
 
 
@@ -87,11 +88,11 @@ def raw_data_processor(log_path,template_storage,sequence_storage,template_index
             #     tier_level= "tier_"+str(int(duration_number*100)%10)+"_"
             """ The following code is used to test the effect of the length of the input vector on the accuracy """
             if duration_number > 0.6:
-                tier_level = "tier_0"
+                tier_level = "tier_0_"
             elif duration_number > 0.3:
-                tier_level = "tier_1"
+                tier_level = "tier_1_"
             else:
-                tier_level = "tier_2"
+                tier_level = "tier_2_"
 
             """
             The if statement checks if this is a valid query template we want.
@@ -138,7 +139,7 @@ def sequence_producer(templates_num,sequence_storage):
     return sequence_list
 
 
-def nn_setup(sequence_list,embedding_table=None,time_step=10,skipgram=False):
+def nn_setup(sequence_list,time_step=10,skipgram=False):
     """
     time_step indicates the step wise of RNN, if time_step is 1, the function generates the dataset for FNN.
     """
@@ -155,12 +156,12 @@ def nn_setup(sequence_list,embedding_table=None,time_step=10,skipgram=False):
 
     return feature_sequences, label_sequence,total_sequence
 
-def generate_training_data(feature_sequences, label_sequences,embedding_table):
-    print(type(embedding_table))
+def generate_training_data(feature_sequences, label_sequences,embedding_table,classification_task=False):
+    # print(type(embedding_table))
     embedding_feature_sequences=[]
     embedding_label_sequences=[]
     for index in range(len(label_sequences)):
-        embedding_label_sequences.append(embedding_table[label_sequences[index]])
+        embedding_label_sequences.append(embedding_table[label_sequences[index]]) if not classification_task else  embedding_label_sequences.append(np.eye(len(embedding_table))[index])
         sub_list=[]
         for senario in feature_sequences[index]:
             sub_list.append(embedding_table[senario])

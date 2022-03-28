@@ -51,7 +51,7 @@ def lstm_predictor(feature_sequences, label_sequence,num_folds=-1, baseline_test
             lstm_model.add(SimpleRNN(60, activation="relu", return_sequences=True ))
             lstm_model.add(Dropout(0.2))
 
-            lstm_model.add(SimpleRNN(100, activation="relu", input_shape=x_train.shape[1:], return_sequences=False ))
+            lstm_model.add(SimpleRNN(30, activation="relu", input_shape=x_train.shape[1:], return_sequences=False ))
             lstm_model.add(Dropout(0.2))
 
             lstm_model.add(Dense(len(label_sequence[0]), activation="relu"))
@@ -105,3 +105,22 @@ def manual_test(feature_sequences, label_sequence):
     lstm_model.fit(x_train, y_train, epochs=10)
     # return the prediction
     return lstm_model.predict(x_test)[0],lstm_model.predict(x_test)[0]
+
+def rnn_classification(feature_sequences, label_sequence):
+    x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequence, test_size=0.2, random_state=0)
+    rnn_cla_model = Sequential()
+    rnn_cla_model.add(SimpleRNN(90, activation="relu", input_shape=x_train.shape[1:], return_sequences=True ))
+    rnn_cla_model.add(Dropout(0.2))
+    rnn_cla_model.add(SimpleRNN(60, activation="relu", return_sequences=True ))
+    rnn_cla_model.add(Dropout(0.2))
+
+    rnn_cla_model.add(SimpleRNN(30, activation="relu", return_sequences=False ))
+    rnn_cla_model.add(Dropout(0.2))
+
+    rnn_cla_model.add(Dense(len(label_sequence[0]), activation="softmax"))
+
+    rnn_cla_model.compile(loss='mean_squared_error', optimizer='adam', metrics=['accuracy'])
+
+    # now lets train our model
+    rnn_cla_model.fit(x_train, y_train, epochs=10)
+    return rnn_cla_model.evaluate(x_test, y_test)[1]
