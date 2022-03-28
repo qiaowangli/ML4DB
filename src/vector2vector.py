@@ -75,12 +75,12 @@ def generate_training_data(sequences, window_size, num_ns, vocab_size):
 
   return targets, contexts, labels
 
-def word_embedding(tokenized_subsequence, lookup_table_dict_length):
+def word_embedding(tokenized_subsequence, lookup_table_dict_length,window_size=3,ns_size=2):
     """
     @ input : tokenized_dict --> input dict just replace vector with int representation and lookup_table_dict_length
     @ output: word embedding table
     """
-    targets, contexts, labels=generate_training_data(tokenized_subsequence,2,2,lookup_table_dict_length)
+    targets, contexts, labels=generate_training_data(tokenized_subsequence,window_size,ns_size,lookup_table_dict_length)
     AUTOTUNE = tf.data.AUTOTUNE
     targets = np.array(targets)
     contexts = np.array(contexts)[:,:,0]
@@ -94,13 +94,13 @@ def word_embedding(tokenized_subsequence, lookup_table_dict_length):
     # constructing embedding table 
     embedding_dim = 30
     # the size of embedding table would be lookup_table_dict_length * embedding_dim
-    word2vec = Word2Vec(lookup_table_dict_length, embedding_dim,10)
+    word2vec = Word2Vec(lookup_table_dict_length, embedding_dim,ns_size)
     word2vec.compile(optimizer='adam',
                     loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
                  metrics=['accuracy'])
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="logs")
+    # tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="logs")
     # fitting model
-    word2vec.fit(dataset, epochs=5, callbacks=[tensorboard_callback])
+    word2vec.fit(dataset, epochs=5)
     # output embedding table
     return word2vec.get_layer('w2v_embedding').get_weights()[0]
 

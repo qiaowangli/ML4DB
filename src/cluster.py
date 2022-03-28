@@ -3,6 +3,8 @@ from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
+import numpy as np
+
 
 
 class kmean_cluster():
