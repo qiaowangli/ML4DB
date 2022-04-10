@@ -106,15 +106,17 @@ def manual_test(feature_sequences, label_sequence):
     # return the prediction
     return lstm_model.predict(x_test)[0],lstm_model.predict(x_test)[0]
 
-def rnn_classification(feature_sequences, label_sequence):
+def rnn_classification(feature_sequences, label_sequence,center_list=None,baseline_test=False):
+    feature_sequences=np.array(feature_sequences) 
+    label_sequence=np.array(label_sequence)
     x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequence, test_size=0.2, random_state=0)
     rnn_cla_model = Sequential()
-    rnn_cla_model.add(SimpleRNN(90, activation="relu", input_shape=x_train.shape[1:], return_sequences=True ))
+    rnn_cla_model.add(LSTM(90, activation="relu", input_shape=x_train.shape[1:], return_sequences=True ))
     rnn_cla_model.add(Dropout(0.2))
-    rnn_cla_model.add(SimpleRNN(60, activation="relu", return_sequences=True ))
+    rnn_cla_model.add(LSTM(60, activation="relu", return_sequences=True ))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(30, activation="relu", return_sequences=False ))
+    rnn_cla_model.add(LSTM(30, activation="relu", return_sequences=False ))
     rnn_cla_model.add(Dropout(0.2))
 
     rnn_cla_model.add(Dense(len(label_sequence[0]), activation="softmax"))

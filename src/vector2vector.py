@@ -92,7 +92,7 @@ def word_embedding(tokenized_subsequence, lookup_table_dict_length,window_size=3
     # acclerating the processing speed 
     dataset = dataset.cache().prefetch(buffer_size=AUTOTUNE)
     # constructing embedding table 
-    embedding_dim = 30
+    embedding_dim = 200
     # the size of embedding table would be lookup_table_dict_length * embedding_dim
     word2vec = Word2Vec(lookup_table_dict_length, embedding_dim,ns_size)
     word2vec.compile(optimizer='adam',
