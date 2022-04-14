@@ -73,7 +73,7 @@ def main():
     print(feature_sequences[0])
     print(label_sequences[0])
     distint_value_length=len(lookup_table)
-    embedding_table = word_embedding(total_sequence,distint_value_length,200)
+    embedding_table = word_embedding(total_sequence,distint_value_length,window_size=3,ns_size=3)
     print(embedding_table[0])
     embedding_feature_sequences, embedding_label_sequences = generate_training_data(feature_sequences,label_sequences,embedding_table,tokenized_sequence_list_target,classification_task=True, new_approach=True)
     print(len(embedding_label_sequences[0]))
