@@ -1,4 +1,4 @@
-#!/Users/royli/miniforge3/envs/pytorch_m1/bin/python3
+
 
 import numpy as np
 from keras import models, layers
@@ -23,10 +23,13 @@ def rnn_regression(feature_sequences, label_sequence):
     rnn_cla_model.add(LSTM(60, activation="relu", return_sequences=False ))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(Dense(len(label_sequence[0])))
+    rnn_cla_model.add(Dense(len(label_sequence[0], activation='linear')))
 
     rnn_cla_model.compile(loss='mean_squared_error', optimizer='adam')
-
     # # now lets train our model
     rnn_cla_model.fit(x_train, y_train, epochs=10)
-    # return rnn_cla_model.evaluate(x_test, y_test)[1]
+
+    ynew = rnn_cla_model.predict(x_test)
+    print(ynew)
+
+    return rnn_cla_model.evaluate(x_test, y_test)[1]
