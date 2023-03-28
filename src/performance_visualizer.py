@@ -1,7 +1,7 @@
 #!/Users/royli/miniforge3/envs/pytorch_m1/bin/python3
 
 
-from matplotlib import pyplot as plt
+# from matplotlib import pyplot as plt
 
 class performance_visualizer():
     def __init__(self):

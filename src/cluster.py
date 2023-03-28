@@ -1,6 +1,3 @@
-#!/Users/royli/miniforge3/envs/pytorch_m1/bin/python3
-
-from matplotlib import pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
@@ -10,13 +7,15 @@ import numpy as np
 
 
 class kmean_cluster():
-    def __init__(self,dataset,k=10):
+    def __init__(self,dataset,k=10, pcaValue = 60):
        self.k=k
        self.dataset=dataset
+       self.pcaValue = pcaValue
 
     def pca(self,dataset):
         # now we call the sklearn library to train and fit.
-        pca = PCA(0.95) # we want 95% variance to be explained
+        # pca = PCA(0.95) # we want 95% variance to be explained
+        pca = PCA(self.pcaValue)
         self.dataset=pca.fit_transform(dataset)
 
     def kmean(self):
@@ -26,6 +25,15 @@ class kmean_cluster():
     def classification(self,model):
         # return model.predict(self.dataset)
         return model.labels_
+    
+    def clusterCenter(self,model):
+        # return model.predict(self.dataset)
+        return model.cluster_centers_
+    
+    def clusterPredict(self,model,predictList):
+        return model.predict(predictList)
+        # return model.cluster_centers_
+
 
 
 class Dbscan_cluster():
