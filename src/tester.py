@@ -6,7 +6,7 @@ from sklearn.decomposition import PCA
 # from matplotlib import pyplot as plt
 from vector2vector import word_embedding
 
-from forcastor import lstm_predictor,manual_test,rnn_classification, rnn_regression
+from forcastor import rnn_regression
 from cluster import kmean_cluster, Dbscan_cluster
 import numpy as np
 import os
