@@ -119,12 +119,9 @@ def generate_training_data(feature_sequences, label_sequences,sequence_list):
     for pIndex in range(len(label_sequences)):
         label_sequences[pIndex] = centerList[KmeanBuilder.clusterPredict(kmean_model,[label_sequences[pIndex][:initial_value]])[0]]
     
-    return feature_sequences,label_sequences
+    return feature_sequences,label_sequences, centerList
 
     
 
-
-    # print(centerList)
-    
 
 

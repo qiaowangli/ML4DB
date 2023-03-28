@@ -8,7 +8,7 @@ from sklearn.model_selection import train_test_split
 
 
 
-def rnn_regression(feature_sequences, label_sequence):
+def rnn_regression(feature_sequences, label_sequence,centerList):
     feature_sequences=np.array(feature_sequences) 
     label_sequence=np.array(label_sequence)
 
@@ -29,7 +29,36 @@ def rnn_regression(feature_sequences, label_sequence):
     # # now lets train our model
     rnn_cla_model.fit(x_train, y_train, epochs=10)
 
-    ynew = rnn_cla_model.predict(x_test)
-    print(ynew)
+    yPredict= rnn_cla_model.predict(x_test)
+
+    correctMatching = 0
+    ########## backward matching evaluation ################
+    for index in y_test:
+        if centerList.index(y_test[index]) == find_nearest_list_index(centerList,yPredict[index]):
+            correctMatching+=1
+    
+    print(correctMatching/len(y_test))
+
+    
 
     return rnn_cla_model.evaluate(x_test, y_test)[1]
+
+
+def euclidean_distance(a, b):
+
+    a = np.array(a)
+    b = np.array(b)
+    return np.sqrt(np.sum((a - b) ** 2))
+
+def find_nearest_list_index(centerList, target_list):
+
+    nearest_index = 0
+    nearest_distance = euclidean_distance(centerList[0], target_list)
+
+    for i in range(1, len(centerList)):
+        distance = euclidean_distance(centerList[i], target_list)
+        if distance < nearest_distance:
+            nearest_index = i
+            nearest_distance = distance
+
+    return nearest_index
