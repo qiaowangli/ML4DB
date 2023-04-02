@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from cluster import kmean_cluster, Dbscan_cluster
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
+import random
 
 
 """ GLOBAL VARIABLE """
@@ -37,14 +38,13 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
 
     """ Experimental configuration """
     initial_template = dataSet['template'][1:700].unique()
-    print(len(initial_template))
+    # print(len(initial_template))
     seond_template = dataSet['template'][1:900].unique()
     final_template = dataSet['template'].unique()
 
     """ KEY: TEMPLATE , VALUE: INDEX OF THE TEMPLATE IN PREDICTION VECTOR"""
     TrackHash = {k: v for v, k in enumerate(final_template)}
 
-    # print(dataSet.iloc[0])
     ########################################################################################################################
     query_group_index=0
     row_index_rawData = 0
@@ -53,10 +53,11 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
     sequence_storage.append([0]*len(final_template))
 
     if splitting_mode == "query":
-        while(row_index_rawData < len(dataSet) or EOF_signal):
-            while(sum(sequence_storage[query_group_index]) < predict_interval):
+        while(row_index_rawData < len(dataSet)-1 or not EOF_signal):
+            print(row_index_rawData)
+            while(sum(sequence_storage[query_group_index]) < random.randint(30, 70)):
                 sequence_storage[query_group_index][TrackHash[dataSet.iloc[row_index_rawData]['template']]] += 1
-                if row_index_rawData == len(dataSet):
+                if row_index_rawData == len(dataSet)-1:
                     EOF_signal = True
                     break
                 else:
@@ -70,6 +71,7 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
                     sequence_storage.append([0]*len(final_template))
                 query_group_index+=1
   
+    print(len(sequence_storage))
     return TrackHash,sequence_storage
 
 
@@ -80,30 +82,38 @@ def nn_setup(sequence_list, time_step):
     """
     feature_sequences=[]
     label_sequence=[]
-    # total_sequence=[]
     index_point=0
     while index_point+time_step <= len(sequence_list)-1:
         feature_sequences.append(sequence_list[index_point:index_point+time_step])
         label_sequence.append(sequence_list[index_point+time_step])
         index_point+=1
 
+    print(len(feature_sequences))
     return feature_sequences, label_sequence,sequence_list
 
 def generate_training_data(feature_sequences, label_sequences,sequence_list):
     
     # x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequences, test_size=0.3, random_state=0, shuffle=False)
     initial_value = 99
-    trainData = sequence_list[:50]
+    trainData = sequence_list[:500]
 
     new_list = [row[:initial_value] for row in trainData]
     trainData = new_list
-    KmeanBuilder = kmean_cluster(trainData[0:initial_value], k= 5, pcaValue=60)
-    # KmeanBuilder.pca(sequence_list)
+    KmeanBuilder = kmean_cluster(trainData[0:initial_value], k= 10, pcaValue=0.8)
+    # KmeanBuilder.pca(trainData)
     kmean_model = KmeanBuilder.kmean()
     res = KmeanBuilder.classification(kmean_model)
     resC = KmeanBuilder.clusterCenter(kmean_model)  
-    pca = PCA(0.98)
-    NN_Input_Center=pca.fit_transform(resC)
+
+    Input_Center=resC
+
+
+    pcaCenter = PCA(0.98)
+    NN_Input_Center=pcaCenter.fit_transform(Input_Center)
+
+    print(NN_Input_Center)
+
+
     # now we get the centers where the length of all centers must be the same
     centerList = {}
     centerIndex =0

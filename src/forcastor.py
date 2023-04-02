@@ -23,7 +23,7 @@ def rnn_regression(feature_sequences, label_sequence,centerList):
     rnn_cla_model.add(LSTM(60, activation="relu", return_sequences=False ))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(Dense(len(label_sequence[0], activation='linear')))
+    rnn_cla_model.add(Dense(len(label_sequence[0]), activation='linear'))
 
     rnn_cla_model.compile(loss='mean_squared_error', optimizer='adam')
     # # now lets train our model
@@ -33,10 +33,10 @@ def rnn_regression(feature_sequences, label_sequence,centerList):
 
     correctMatching = 0
     ########## backward matching evaluation ################
-    for index in y_test:
-        if centerList.index(y_test[index]) == find_nearest_list_index(centerList,yPredict[index]):
+    for index in range(len(y_test)):
+        if np.where(centerList == y_test[index])[0][0] == find_nearest_list_index(centerList,yPredict[index]):
             correctMatching+=1
-    
+        
     print(correctMatching/len(y_test))
 
     

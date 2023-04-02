@@ -26,10 +26,13 @@ def main():
 
 
     """ For pgbench dataset"""
-    template_storage,sequence_storage=raw_data_processor("/Users/royli/Desktop/ML4DB/inputLog.csv",template_storage,sequence_storage,'query',6)
-    feature_sequences, label_sequence, sequence_storage= nn_setup(sequence_storage, 4)
+    template_storage,sequence_storage=raw_data_processor("/Users/royli/Desktop/inputLogClear.csv",template_storage,sequence_storage,'query',6)
+    feature_sequences, label_sequence, sequence_storage= nn_setup(sequence_storage, 5)
     feature_sequences, label_sequence,centerList = generate_training_data(feature_sequences, label_sequence, sequence_storage)
-    print(rnn_regression(feature_sequences, label_sequence,centerList))
+
+
+    print(len(centerList[0]))
+    # print(rnn_regression(feature_sequences, label_sequence,centerList))
 
 
 
