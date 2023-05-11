@@ -1,4 +1,3 @@
-
 import re
 import time
 import numpy as np
@@ -8,8 +7,10 @@ import matplotlib.pyplot as plt
 from cluster import kmean_cluster, Dbscan_cluster
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
-import random
+from sklearn.manifold import TSNE
 
+import random
+import math
 
 """ GLOBAL VARIABLE """
 
@@ -37,10 +38,12 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
 
 
     """ Experimental configuration """
-    initial_template = dataSet['template'][1:700].unique()
+    # initial_template = dataSet['template'][1:700].unique()
     # print(len(initial_template))
-    seond_template = dataSet['template'][1:900].unique()
+    # seond_template = dataSet['template'][1:900].unique()
     final_template = dataSet['template'].unique()
+    # print(final_template)
+
 
     """ KEY: TEMPLATE , VALUE: INDEX OF THE TEMPLATE IN PREDICTION VECTOR"""
     TrackHash = {k: v for v, k in enumerate(final_template)}
@@ -54,8 +57,8 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
 
     if splitting_mode == "query":
         while(row_index_rawData < len(dataSet)-1 or not EOF_signal):
-            print(row_index_rawData)
-            while(sum(sequence_storage[query_group_index]) < random.randint(30, 70)):
+            # print(row_index_rawData)
+            while(sum(sequence_storage[query_group_index]) < random.randint(20, 50)):
                 sequence_storage[query_group_index][TrackHash[dataSet.iloc[row_index_rawData]['template']]] += 1
                 if row_index_rawData == len(dataSet)-1:
                     EOF_signal = True
@@ -63,23 +66,16 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
                 else:
                     row_index_rawData+=1
             if not EOF_signal:  
-                if row_index_rawData < 700:
-                    sequence_storage.append([0]*len(final_template))
-                elif row_index_rawData < 900:
-                    sequence_storage.append([0]*len(final_template))
-                else:
-                    sequence_storage.append([0]*len(final_template))
+                sequence_storage.append([0]*len(final_template))
                 query_group_index+=1
   
-    print(len(sequence_storage))
+    # print(len(sequence_storage))
     return TrackHash,sequence_storage
 
 
 
 def nn_setup(sequence_list, time_step):
-    """
-    time_step indicates the step wise of RNN, if time_step is 1, the function generates the dataset for FNN.
-    """
+
     feature_sequences=[]
     label_sequence=[]
     index_point=0
@@ -88,50 +84,90 @@ def nn_setup(sequence_list, time_step):
         label_sequence.append(sequence_list[index_point+time_step])
         index_point+=1
 
-    print(len(feature_sequences))
-    return feature_sequences, label_sequence,sequence_list
+    # print(len(feature_sequences))
+    return feature_sequences, label_sequence
 
-def generate_training_data(feature_sequences, label_sequences,sequence_list):
+
+def generate_training_data_initial(sequence_list, initial_value):
     
-    # x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequences, test_size=0.3, random_state=0, shuffle=False)
-    initial_value = 99
-    trainData = sequence_list[:500]
+    currentCutOff = initial_value
+    # print(len(sequence_list))
+    for currentListIndex in range(len(sequence_list)):
+        if(sum(sequence_list[currentListIndex]) != sum(sequence_list[currentListIndex][:currentCutOff])):
+            # print('dasdsa' +str(currentListIndex))
+            return currentListIndex
 
-    new_list = [row[:initial_value] for row in trainData]
-    trainData = new_list
-    KmeanBuilder = kmean_cluster(trainData[0:initial_value], k= 10, pcaValue=0.8)
-    # KmeanBuilder.pca(trainData)
+
+
+def generate_training_data(sequence_list, initial_value, cutoffPrecentage, center):
+
+    # Initial setup and center_construction #
+    startingIndex = generate_training_data_initial(sequence_list,initial_value)
+    trainningData, NN_Input_Center = center_construction(sequence_list[:startingIndex], initial_value, center)
+    
+    currentcutoffIndex = initial_value
+    nextcutoffIndex = -1
+    abnormalCounter = 0
+    mainCounter = startingIndex
+    # print(startingIndex)
+    for currentListIndex in range(startingIndex+1, len(sequence_list)):
+        if(sum(sequence_list[currentListIndex]) > sum(sequence_list[currentListIndex][:currentcutoffIndex])):
+            abnormalCounter += 1
+            nextcutoffIndex = max(nextcutoffIndex, [index for index, item in enumerate(sequence_list[currentListIndex]) if item != 0][-1]) + 1
+
+        # print(len(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center)))
+        trainningData.append(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center))
+        mainCounter += 1
+
+        if (abnormalCounter/mainCounter) >= cutoffPrecentage:
+            # reconsturct 
+            trainningData, NN_Input_Center = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center)
+            # reset cutoff values
+            currentcutoffIndex = nextcutoffIndex
+            nextcutoffIndex = -1
+            abnormalCounter = 0
+        # print(abnormalCounter)
+    # print(currentcutoffIndex)
+
+    return trainningData
+
+    
+            
+
+
+def center_construction(trainData, cutoffValue, center): 
+
+    print(cutoffValue)
+    truncated_list = [sublist[:cutoffValue] for sublist in trainData]
+    trainData = truncated_list
+
+    KmeanBuilder = kmean_cluster(trainData, k= center)
+    
     kmean_model = KmeanBuilder.kmean()
     res = KmeanBuilder.classification(kmean_model)
     resC = KmeanBuilder.clusterCenter(kmean_model)  
 
     Input_Center=resC
 
-
-    pcaCenter = PCA(0.98)
+    pcaCenter = PCA(center)
     NN_Input_Center=pcaCenter.fit_transform(Input_Center)
 
-    print(NN_Input_Center)
-
-
-    # now we get the centers where the length of all centers must be the same
-    centerList = {}
-    centerIndex =0
-    for centerIndex in range(len(NN_Input_Center)):
-        centerList[centerIndex] = NN_Input_Center[centerIndex]
-
-    #now we get the hashtable to convert our prediction vector to the coressponding center
-
-    for pIndex in range(len(feature_sequences)):
-        for lIndex in range(len(feature_sequences[pIndex])):
-            feature_sequences[pIndex][lIndex] = centerList[KmeanBuilder.clusterPredict(kmean_model,[feature_sequences[pIndex][lIndex][:initial_value]])[0]]
+    # tsne = TSNE(n_components=80)
+    # X_tsne = tsne.fit_transform(Input_Center)
     
-    for pIndex in range(len(label_sequences)):
-        label_sequences[pIndex] = centerList[KmeanBuilder.clusterPredict(kmean_model,[label_sequences[pIndex][:initial_value]])[0]]
+    for currentIndex in range(len(trainData)):
+        trainData[currentIndex] = NN_Input_Center[res[currentIndex]]
     
-    return feature_sequences,label_sequences, centerList
-
-    
+    return trainData, NN_Input_Center
 
 
 
+def center_matching(target_list, centerList):
+    closest_distance = math.inf
+    closest_list = None
+    for l in centerList:
+        distance = math.sqrt(sum([(a - b) ** 2 for a, b in zip(l, target_list)]))
+        if distance < closest_distance:
+            closest_distance = distance
+            closest_list = l
+    return closest_list

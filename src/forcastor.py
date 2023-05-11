@@ -27,7 +27,7 @@ def rnn_regression(feature_sequences, label_sequence,centerList):
 
     rnn_cla_model.compile(loss='mean_squared_error', optimizer='adam')
     # # now lets train our model
-    rnn_cla_model.fit(x_train, y_train, epochs=10)
+    rnn_cla_model.fit(x_train, y_train, epochs=100)
 
     yPredict= rnn_cla_model.predict(x_test)
 
@@ -41,7 +41,7 @@ def rnn_regression(feature_sequences, label_sequence,centerList):
 
     
 
-    return rnn_cla_model.evaluate(x_test, y_test)[1]
+    return rnn_cla_model.evaluate(x_test, y_test)
 
 
 def euclidean_distance(a, b):
