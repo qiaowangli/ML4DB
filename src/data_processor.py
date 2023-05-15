@@ -8,11 +8,19 @@ from cluster import kmean_cluster, Dbscan_cluster
 from sklearn.model_selection import train_test_split
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import OPTICS
+from collections import Counter
+
 
 import random
 import math
 
 """ GLOBAL VARIABLE """
+
+INITIAL_TEMPLATE_OBSERVATION = -1
 
 
 def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode="query",predict_interval=6):
@@ -91,12 +99,14 @@ def nn_setup(sequence_list, time_step):
 def generate_training_data_initial(sequence_list, initial_value):
     
     currentCutOff = initial_value
+    global INITIAL_TEMPLATE_OBSERVATION
+    INITIAL_TEMPLATE_OBSERVATION =initial_value
     # print(len(sequence_list))
     for currentListIndex in range(len(sequence_list)):
         if(sum(sequence_list[currentListIndex]) != sum(sequence_list[currentListIndex][:currentCutOff])):
             # print('dasdsa' +str(currentListIndex))
             return currentListIndex
-
+        
 
 
 def generate_training_data(sequence_list, initial_value, cutoffPrecentage, center):
@@ -129,36 +139,152 @@ def generate_training_data(sequence_list, initial_value, cutoffPrecentage, cente
         # print(abnormalCounter)
     # print(currentcutoffIndex)
 
-    return trainningData
+    return trainningData, NN_Input_Center
 
     
             
 
 
-def center_construction(trainData, cutoffValue, center): 
+def center_construction(trainData, cutoffValue, NumOfCenter):
 
-    print(cutoffValue)
     truncated_list = [sublist[:cutoffValue] for sublist in trainData]
     trainData = truncated_list
 
-    KmeanBuilder = kmean_cluster(trainData, k= center)
+    global INITIAL_TEMPLATE_OBSERVATION
+    Pcaer = PCA(INITIAL_TEMPLATE_OBSERVATION)
+    Pcaer=Pcaer.fit_transform(trainData)
+
+    dbscan = DBSCAN(eps=0.5, min_samples=5)
+    dbscan.fit(Pcaer)
+    labels = dbscan.labels_
+
+    # tsne = TSNE(n_components=80)
+    # X_tsne = tsne.fit_transform(Input_Center)
+
+    centers = []
+    unique_labels = set(labels)
+    for label in unique_labels - {-1}:
+        group_indices = np.where(labels == label)[0]
+        group_points = Pcaer[group_indices]
+        center = np.mean(group_points, axis=0)
+        centers.append(center)
+    # print(len(centers))
     
-    kmean_model = KmeanBuilder.kmean()
-    res = KmeanBuilder.classification(kmean_model)
-    resC = KmeanBuilder.clusterCenter(kmean_model)  
+    for currentIndex in range(len(labels)):
+        if(labels[currentIndex] == -1):
+            trainData[currentIndex] = [0]*INITIAL_TEMPLATE_OBSERVATION
+        else:
+            trainData[currentIndex] = centers[labels[currentIndex]]
+    
+    return trainData, centers
 
-    Input_Center=resC
 
-    pcaCenter = PCA(center)
-    NN_Input_Center=pcaCenter.fit_transform(Input_Center)
+    # truncated_list = [sublist[:cutoffValue] for sublist in trainData]
+    # trainData = truncated_list
+
+    # KmeanBuilder = kmean_cluster(trainData, k= 20)
+    # kmean_model = KmeanBuilder.kmean()
+    # res = KmeanBuilder.classification(kmean_model)
+    # resC = KmeanBuilder.clusterCenter(kmean_model)  
+
+    # Input_Center=resC
+
+    # pcaCenter = PCA(1)
+    # T_pca=pcaCenter.fit_transform(trainData)
+
+    # T_pca = trainData
+
+    # kmeans = KMeans(n_clusters=20)
+    # kmeans.fit(T_pca)
+
+    # # Get the labels assigned by K-means to each data point
+    # labels = kmeans.labels_
+
+    # Count the quantity of data points in each cluster
+    # counter = Counter(labels)
+
+    # Get the center IDs and corresponding quantities
+    # center_ids = list(counter.keys())
+    # quantities = list(counter.values())
+
+    # Create the plot
+    # plt.figure(figsize=(12, 4))
+    # plt.grid(True, linestyle='--', alpha=0.5)
+    # plt.bar(center_ids, quantities, color='green', hatch='*', edgecolor = "black")
+    
+    # # Add labels and title
+    # plt.xlabel('Cluster ID', fontweight='bold')
+    # plt.ylabel('Quantity', fontweight='bold')
+
+
+
+    # Display the plot
+    # plt.xticks(np.arange(min(center_ids), max(center_ids) + 1, 1), map(int, np.arange(min(center_ids), max(center_ids) + 1, 1)), fontsize = 6)
+    # plt.legend(["KMEAN"])
+    # plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
+    # # plt.show()
+
+    # # labels = kmeans.predict(X_pca)
+
+    # dbscan = DBSCAN(eps=0.5, min_samples=5)
+    # dbscan.fit(T_pca)
+    # labels = dbscan.labels_
+
+    # opticsTest = OPTICS(max_eps=0.5, min_samples=2)
+    # labels = opticsTest.fit_predict(X_pca)
+
+
+    # Create a scatter plot of the first two principal components with color-coded cluster assignments
+    
+    # plt.scatter(T_pca[:, 0], T_pca[:, 1], c= labels)
+    # # plt.scatter(X_pca[:, 0], X_pca[:, 1], c=list(range(len(resC))))
+    # # for i, txt in enumerate(range(len(resC))):
+    # #     plt.annotate(txt, (X_pca[i, 0], X_pca[i, 1]))
+
+    # plt.xlabel('First principle component')
+    # plt.ylabel('Second principle component')
+    # plt.title('Senario center distribution after PCA with kmean = 20')
+    # plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
 
     # tsne = TSNE(n_components=80)
     # X_tsne = tsne.fit_transform(Input_Center)
     
-    for currentIndex in range(len(trainData)):
-        trainData[currentIndex] = NN_Input_Center[res[currentIndex]]
+    # for currentIndex in range(len(trainData)):
+    #     trainData[currentIndex] = NN_Input_Center[res[currentIndex]]
     
-    return trainData, NN_Input_Center
+    # return trainData, NN_Input_Center
+
+    # Previous code for fitting DBSCAN and obtaining labels
+
+    # centers = []
+    # quantities = []
+    # unique_labels = set(labels)
+    # for label in unique_labels - {-1}:
+    #     group_indices = np.where(labels == label)[0]
+    #     group_points = T_pca[group_indices]
+    #     center = np.mean(group_points, axis=0)  # Or use np.median for a robust center calculation
+    #     centers.append(center)
+    #     quantity = len(group_points)
+    #     quantities.append(quantity)
+
+    # # Create bar plot
+    # plt.figure(figsize=(12, 2))
+    # x = range(len(centers))
+    # plt.grid(True, linestyle='--', alpha=0.5)
+    # plt.bar(x, quantities, color='pink', hatch='*', edgecolor = "black")
+    
+
+    # # Add center IDs as x-axis labels
+    # plt.legend(["DBSCAN"])
+    # plt.xticks(x, [str(i) for i in range(len(centers))], fontsize = 6)
+
+    # # Add labels and title
+    # # plt.xlabel('Center ID', fontweight='bold')
+    # plt.ylabel('Quantity', fontweight='bold')
+
+    # # Display the plot
+    # # plt.show()
+    # plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
 
 
 

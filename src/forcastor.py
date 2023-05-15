@@ -1,10 +1,18 @@
 
 
 import numpy as np
-from keras import models, layers
+from keras import models, layers, callbacks
 from keras.models import Sequential
 from keras.layers import Dense, LSTM, Dropout,SimpleRNN
 from sklearn.model_selection import train_test_split
+
+
+class LossHistory(callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+ 
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
 
 
 
@@ -27,7 +35,12 @@ def rnn_regression(feature_sequences, label_sequence,centerList):
 
     rnn_cla_model.compile(loss='mean_squared_error', optimizer='adam')
     # # now lets train our model
-    rnn_cla_model.fit(x_train, y_train, epochs=100)
+
+    history = LossHistory()
+
+    rnn_cla_model.fit(x_train, y_train, epochs=100, callbacks=[history])
+
+    print(history.losses)
 
     yPredict= rnn_cla_model.predict(x_test)
 
