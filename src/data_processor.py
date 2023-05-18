@@ -97,23 +97,23 @@ def nn_setup(sequence_list, time_step):
 
 
 def generate_training_data_initial(sequence_list, initial_value):
-    
-    currentCutOff = initial_value
+       
     global INITIAL_TEMPLATE_OBSERVATION
-    INITIAL_TEMPLATE_OBSERVATION =initial_value
+    INITIAL_TEMPLATE_OBSERVATION = int(initial_value / 2)
+    currentCutOff = initial_value
     # print(len(sequence_list))
     for currentListIndex in range(len(sequence_list)):
         if(sum(sequence_list[currentListIndex]) != sum(sequence_list[currentListIndex][:currentCutOff])):
-            # print('dasdsa' +str(currentListIndex))
+            print('starting at' + str(currentListIndex))
             return currentListIndex
-        
+    return len(sequence_list) - 1
 
 
 def generate_training_data(sequence_list, initial_value, cutoffPrecentage, center):
 
     # Initial setup and center_construction #
     startingIndex = generate_training_data_initial(sequence_list,initial_value)
-    trainningData, NN_Input_Center = center_construction(sequence_list[:startingIndex], initial_value, center)
+    trainningData, NN_Input_Center = center_construction(sequence_list[:startingIndex], initial_value, center, startingIndex+1)
     
     currentcutoffIndex = initial_value
     nextcutoffIndex = -1
@@ -131,13 +131,12 @@ def generate_training_data(sequence_list, initial_value, cutoffPrecentage, cente
 
         if (abnormalCounter/mainCounter) >= cutoffPrecentage:
             # reconsturct 
-            trainningData, NN_Input_Center = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center)
+            trainningData, NN_Input_Center = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center, currentListIndex)
             # reset cutoff values
             currentcutoffIndex = nextcutoffIndex
             nextcutoffIndex = -1
             abnormalCounter = 0
-        # print(abnormalCounter)
-    # print(currentcutoffIndex)
+
 
     return trainningData, NN_Input_Center
 
@@ -145,7 +144,7 @@ def generate_training_data(sequence_list, initial_value, cutoffPrecentage, cente
             
 
 
-def center_construction(trainData, cutoffValue, NumOfCenter):
+def center_construction(trainData, cutoffValue, NumOfCenter, currentListIndex):
 
     truncated_list = [sublist[:cutoffValue] for sublist in trainData]
     trainData = truncated_list
@@ -154,29 +153,98 @@ def center_construction(trainData, cutoffValue, NumOfCenter):
     Pcaer = PCA(INITIAL_TEMPLATE_OBSERVATION)
     Pcaer=Pcaer.fit_transform(trainData)
 
-    dbscan = DBSCAN(eps=0.5, min_samples=5)
-    dbscan.fit(Pcaer)
-    labels = dbscan.labels_
+
+    # dbscan = DBSCAN(eps=0.7, min_samples=2)
+    # dbscan.fit(Pcaer)
+    # labels = dbscan.labels_
+    kmeans = KMeans(n_clusters=20)
+    kmeans.fit(Pcaer)
+    # Get the labels assigned by K-means to each data point
+    labels = kmeans.labels_
+    centers = kmeans.cluster_centers_
+    counter = Counter(labels)
+    # Get the center IDs and corresponding quantities
+    center_ids = list(counter.keys())
+    quantities = list(counter.values())
+    print(sum(quantities))
+    # Create the plot
+    plt.figure(figsize=(12, 4))
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.bar(center_ids, quantities, color='green', hatch='*', edgecolor = "black")
+    # Add labels and title
+    plt.xlabel('Cluster ID', fontweight='bold')
+    plt.ylabel('Quantity', fontweight='bold')
+    # Display the plot
+    plt.xticks(np.arange(min(center_ids), max(center_ids) + 1, 1), map(int, np.arange(min(center_ids), max(center_ids) + 1, 1)), fontsize = 6)
+    plt.legend(["KMEAN"])
+    plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
+    # plt.show()
+
+
 
     # tsne = TSNE(n_components=80)
     # X_tsne = tsne.fit_transform(Input_Center)
 
-    centers = []
-    unique_labels = set(labels)
-    for label in unique_labels - {-1}:
-        group_indices = np.where(labels == label)[0]
-        group_points = Pcaer[group_indices]
-        center = np.mean(group_points, axis=0)
-        centers.append(center)
-    # print(len(centers))
+    # centers = []
+    # quantities = []
+    # checkSum = 0
+    # unique_labels = set(labels)
+    # for label in unique_labels - {-1}:
+    #     group_indices = np.where(labels == label)[0]
+    #     group_points = Pcaer[group_indices]
+    #     center = np.mean(group_points, axis=0)  # Or use np.median for a robust center calculation
+    #     centers.append(center)
+    #     quantity = len(group_points)
+    #     quantities.append(quantity)
+    #     checkSum+= quantity
+    # print("the sum is " + str(checkSum))
+    # print(len(labels))
     
+    # check = 0
+    # for test in range(len(labels)):
+    #     if(labels[test] == -1):
+    #         check +=1
+    # print(check)
+    # print(len(unique_labels))
+
+    # Create bar plot
+    # plt.figure(figsize=(12, 2))
+    # x = range(len(centers))
+    # plt.grid(True, linestyle='--', alpha=0.5)
+    # plt.bar(x, quantities, color='green', hatch='*', edgecolor = "black")
+    
+
+    # # Add center IDs as x-axis labels
+    # plt.legend(["DBSCAN testing"])
+    # plt.xticks(x, [str(i) for i in range(len(centers))], fontsize = 3)
+
+    # # Add labels and title
+    # # plt.xlabel('Center ID', fontweight='bold')
+    # plt.ylabel('Quantity', fontweight='bold')
+    # # print(len(centers))
+    # check =0
+    # for test in range(len(labels)):
+    #     if(labels[test] == -1):
+    #         check +=1
+    # print('missing' + str(check))
+    # print('current Index' + str(currentListIndex))
+    # print('current center' + str(len(unique_labels)))
+
+    #  # Display the plot
+    # # plt.show()
+    # plt.savefig('/Users/royli/Desktop/scatter_plot'+ str(currentListIndex) +'.png', dpi=300)
+
+
+
+    outList = []
+    # print(len(centers))
     for currentIndex in range(len(labels)):
         if(labels[currentIndex] == -1):
-            trainData[currentIndex] = [0]*INITIAL_TEMPLATE_OBSERVATION
+            outList.append([0]*INITIAL_TEMPLATE_OBSERVATION)
         else:
-            trainData[currentIndex] = centers[labels[currentIndex]]
+            outList.append(centers[labels[currentIndex]])
     
-    return trainData, centers
+    return outList, centers
 
 
     # truncated_list = [sublist[:cutoffValue] for sublist in trainData]
@@ -256,26 +324,45 @@ def center_construction(trainData, cutoffValue, NumOfCenter):
 
     # Previous code for fitting DBSCAN and obtaining labels
 
+
+    # truncated_list = [sublist[:cutoffValue] for sublist in trainData]
+    # trainData = truncated_list
+
+    # global INITIAL_TEMPLATE_OBSERVATION
+    # Pcaer = PCA(INITIAL_TEMPLATE_OBSERVATION)
+    # Pcaer=Pcaer.fit_transform(trainData)
+
+    # dbscan = DBSCAN(eps=1.5, min_samples=4)
+    # dbscan.fit(Pcaer)
+    # labels = dbscan.labels_
+
     # centers = []
     # quantities = []
     # unique_labels = set(labels)
     # for label in unique_labels - {-1}:
     #     group_indices = np.where(labels == label)[0]
-    #     group_points = T_pca[group_indices]
+    #     group_points = Pcaer[group_indices]
     #     center = np.mean(group_points, axis=0)  # Or use np.median for a robust center calculation
     #     centers.append(center)
     #     quantity = len(group_points)
     #     quantities.append(quantity)
+    
+    # check = 0
+    # for test in range(len(labels)):
+    #     if(labels[test] == -1):
+    #         check +=1
+    # print(check)
+    # print(len(unique_labels))
 
     # # Create bar plot
     # plt.figure(figsize=(12, 2))
     # x = range(len(centers))
     # plt.grid(True, linestyle='--', alpha=0.5)
-    # plt.bar(x, quantities, color='pink', hatch='*', edgecolor = "black")
+    # plt.bar(x, quantities, color='red', hatch='*', edgecolor = "black")
     
 
     # # Add center IDs as x-axis labels
-    # plt.legend(["DBSCAN"])
+    # plt.legend(["DBSCAN, 1.5, 4"])
     # plt.xticks(x, [str(i) for i in range(len(centers))], fontsize = 6)
 
     # # Add labels and title
