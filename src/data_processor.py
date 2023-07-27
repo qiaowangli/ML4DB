@@ -41,16 +41,17 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
     dataSet['duration'] = np.where(dataSet['duration_checker'] == True, dataSet['duration'], -1)
     dataSet['duration'] = dataSet['duration'].astype(float)
     dataSet['statement'] = dataSet['message'].str.split('ms').str[1].str.split("execute <unnamed>: ").str[1]
-    dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,100,200,300,400,500,600,700,800,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"])
+    # dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,100,200,300,400,500,600,700,800,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"])
+    dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,500,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3"])
     dataSet['template'] = dataSet['discrete_duration'].astype(str) +"<CHECKMARK>"+ dataSet['statement'].astype(str)
+
+    # dataSet['template'] = dataSet['statement'].astype(str)
 
 
     """ Experimental configuration """
-    # initial_template = dataSet['template'][1:700].unique()
-    # print(len(initial_template))
-    # seond_template = dataSet['template'][1:900].unique()
     final_template = dataSet['template'].unique()
-    # print(final_template)
+    print(len(final_template))
+    # exit(-1)
 
 
     """ KEY: TEMPLATE , VALUE: INDEX OF THE TEMPLATE IN PREDICTION VECTOR"""
@@ -66,7 +67,8 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
     if splitting_mode == "query":
         while(row_index_rawData < len(dataSet)-1 or not EOF_signal):
             # print(row_index_rawData)
-            while(sum(sequence_storage[query_group_index]) < random.randint(20, 50)):
+            density = random.randint(80, 100)
+            while(sum(sequence_storage[query_group_index]) < density):
                 sequence_storage[query_group_index][TrackHash[dataSet.iloc[row_index_rawData]['template']]] += 1
                 if row_index_rawData == len(dataSet)-1:
                     EOF_signal = True
@@ -82,14 +84,14 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
 
 
 
-def nn_setup(sequence_list, time_step):
+def nn_setup(sequence_list, time_step, NN_Input_Center, labels):
 
     feature_sequences=[]
     label_sequence=[]
     index_point=0
     while index_point+time_step <= len(sequence_list)-1:
         feature_sequences.append(sequence_list[index_point:index_point+time_step])
-        label_sequence.append(sequence_list[index_point+time_step])
+        label_sequence.append(NN_Input_Center[labels[index_point+time_step]])
         index_point+=1
 
     # print(len(feature_sequences))
@@ -101,7 +103,6 @@ def generate_training_data_initial(sequence_list, initial_value):
     global INITIAL_TEMPLATE_OBSERVATION
     INITIAL_TEMPLATE_OBSERVATION = int(initial_value / 2)
     currentCutOff = initial_value
-    # print(len(sequence_list))
     for currentListIndex in range(len(sequence_list)):
         if(sum(sequence_list[currentListIndex]) != sum(sequence_list[currentListIndex][:currentCutOff])):
             print('starting at' + str(currentListIndex))
@@ -113,7 +114,7 @@ def generate_training_data(sequence_list, initial_value, cutoffPrecentage, cente
 
     # Initial setup and center_construction #
     startingIndex = generate_training_data_initial(sequence_list,initial_value)
-    trainningData, NN_Input_Center = center_construction(sequence_list[:startingIndex], initial_value, center, startingIndex+1)
+    trainningData, NN_Input_Center, labels = center_construction(sequence_list[:startingIndex], initial_value, center, startingIndex+1)
     
     currentcutoffIndex = initial_value
     nextcutoffIndex = -1
@@ -121,24 +122,24 @@ def generate_training_data(sequence_list, initial_value, cutoffPrecentage, cente
     mainCounter = startingIndex
     # print(startingIndex)
     for currentListIndex in range(startingIndex+1, len(sequence_list)):
+        print('dsdsadsadasdsadsadasdasdasdasdasds')
         if(sum(sequence_list[currentListIndex]) > sum(sequence_list[currentListIndex][:currentcutoffIndex])):
             abnormalCounter += 1
             nextcutoffIndex = max(nextcutoffIndex, [index for index, item in enumerate(sequence_list[currentListIndex]) if item != 0][-1]) + 1
 
-        # print(len(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center)))
         trainningData.append(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center))
         mainCounter += 1
 
         if (abnormalCounter/mainCounter) >= cutoffPrecentage:
             # reconsturct 
-            trainningData, NN_Input_Center = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center, currentListIndex)
+            trainningData, NN_Input_Center, labels = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center, currentListIndex)
             # reset cutoff values
             currentcutoffIndex = nextcutoffIndex
             nextcutoffIndex = -1
             abnormalCounter = 0
 
 
-    return trainningData, NN_Input_Center
+    return trainningData, NN_Input_Center, labels
 
     
             
@@ -150,229 +151,29 @@ def center_construction(trainData, cutoffValue, NumOfCenter, currentListIndex):
     trainData = truncated_list
 
     global INITIAL_TEMPLATE_OBSERVATION
-    Pcaer = PCA(INITIAL_TEMPLATE_OBSERVATION)
+    Pcaer = PCA(10)
     Pcaer=Pcaer.fit_transform(trainData)
 
-
-    # dbscan = DBSCAN(eps=0.7, min_samples=2)
-    # dbscan.fit(Pcaer)
-    # labels = dbscan.labels_
-    kmeans = KMeans(n_clusters=20)
+    kmeans = KMeans(n_clusters=4)
     kmeans.fit(Pcaer)
     # Get the labels assigned by K-means to each data point
     labels = kmeans.labels_
     centers = kmeans.cluster_centers_
-    counter = Counter(labels)
-    # Get the center IDs and corresponding quantities
-    center_ids = list(counter.keys())
-    quantities = list(counter.values())
-    print(sum(quantities))
-    # Create the plot
-    plt.figure(figsize=(12, 4))
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.bar(center_ids, quantities, color='green', hatch='*', edgecolor = "black")
-    # Add labels and title
-    plt.xlabel('Cluster ID', fontweight='bold')
-    plt.ylabel('Quantity', fontweight='bold')
-    # Display the plot
-    plt.xticks(np.arange(min(center_ids), max(center_ids) + 1, 1), map(int, np.arange(min(center_ids), max(center_ids) + 1, 1)), fontsize = 6)
-    plt.legend(["KMEAN"])
-    plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
-    # plt.show()
-
-
-
-    # tsne = TSNE(n_components=80)
-    # X_tsne = tsne.fit_transform(Input_Center)
-
-    # centers = []
-    # quantities = []
-    # checkSum = 0
-    # unique_labels = set(labels)
-    # for label in unique_labels - {-1}:
-    #     group_indices = np.where(labels == label)[0]
-    #     group_points = Pcaer[group_indices]
-    #     center = np.mean(group_points, axis=0)  # Or use np.median for a robust center calculation
-    #     centers.append(center)
-    #     quantity = len(group_points)
-    #     quantities.append(quantity)
-    #     checkSum+= quantity
-    # print("the sum is " + str(checkSum))
-    # print(len(labels))
-    
-    # check = 0
-    # for test in range(len(labels)):
-    #     if(labels[test] == -1):
-    #         check +=1
-    # print(check)
-    # print(len(unique_labels))
-
-    # Create bar plot
-    # plt.figure(figsize=(12, 2))
-    # x = range(len(centers))
-    # plt.grid(True, linestyle='--', alpha=0.5)
-    # plt.bar(x, quantities, color='green', hatch='*', edgecolor = "black")
-    
-
-    # # Add center IDs as x-axis labels
-    # plt.legend(["DBSCAN testing"])
-    # plt.xticks(x, [str(i) for i in range(len(centers))], fontsize = 3)
-
-    # # Add labels and title
-    # # plt.xlabel('Center ID', fontweight='bold')
-    # plt.ylabel('Quantity', fontweight='bold')
-    # # print(len(centers))
-    # check =0
-    # for test in range(len(labels)):
-    #     if(labels[test] == -1):
-    #         check +=1
-    # print('missing' + str(check))
-    # print('current Index' + str(currentListIndex))
-    # print('current center' + str(len(unique_labels)))
-
-    #  # Display the plot
-    # # plt.show()
-    # plt.savefig('/Users/royli/Desktop/scatter_plot'+ str(currentListIndex) +'.png', dpi=300)
-
-
 
     outList = []
-    # print(len(centers))
+
+    # centersNor = normalize_with_global_max(centers)
+
+    centersNor = centers
+
     for currentIndex in range(len(labels)):
         if(labels[currentIndex] == -1):
             outList.append([0]*INITIAL_TEMPLATE_OBSERVATION)
         else:
-            outList.append(centers[labels[currentIndex]])
+            # outList.append(centersNor[labels[currentIndex]])
+            outList.append(Pcaer[currentIndex])
     
-    return outList, centers
-
-
-    # truncated_list = [sublist[:cutoffValue] for sublist in trainData]
-    # trainData = truncated_list
-
-    # KmeanBuilder = kmean_cluster(trainData, k= 20)
-    # kmean_model = KmeanBuilder.kmean()
-    # res = KmeanBuilder.classification(kmean_model)
-    # resC = KmeanBuilder.clusterCenter(kmean_model)  
-
-    # Input_Center=resC
-
-    # pcaCenter = PCA(1)
-    # T_pca=pcaCenter.fit_transform(trainData)
-
-    # T_pca = trainData
-
-    # kmeans = KMeans(n_clusters=20)
-    # kmeans.fit(T_pca)
-
-    # # Get the labels assigned by K-means to each data point
-    # labels = kmeans.labels_
-
-    # Count the quantity of data points in each cluster
-    # counter = Counter(labels)
-
-    # Get the center IDs and corresponding quantities
-    # center_ids = list(counter.keys())
-    # quantities = list(counter.values())
-
-    # Create the plot
-    # plt.figure(figsize=(12, 4))
-    # plt.grid(True, linestyle='--', alpha=0.5)
-    # plt.bar(center_ids, quantities, color='green', hatch='*', edgecolor = "black")
-    
-    # # Add labels and title
-    # plt.xlabel('Cluster ID', fontweight='bold')
-    # plt.ylabel('Quantity', fontweight='bold')
-
-
-
-    # Display the plot
-    # plt.xticks(np.arange(min(center_ids), max(center_ids) + 1, 1), map(int, np.arange(min(center_ids), max(center_ids) + 1, 1)), fontsize = 6)
-    # plt.legend(["KMEAN"])
-    # plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
-    # # plt.show()
-
-    # # labels = kmeans.predict(X_pca)
-
-    # dbscan = DBSCAN(eps=0.5, min_samples=5)
-    # dbscan.fit(T_pca)
-    # labels = dbscan.labels_
-
-    # opticsTest = OPTICS(max_eps=0.5, min_samples=2)
-    # labels = opticsTest.fit_predict(X_pca)
-
-
-    # Create a scatter plot of the first two principal components with color-coded cluster assignments
-    
-    # plt.scatter(T_pca[:, 0], T_pca[:, 1], c= labels)
-    # # plt.scatter(X_pca[:, 0], X_pca[:, 1], c=list(range(len(resC))))
-    # # for i, txt in enumerate(range(len(resC))):
-    # #     plt.annotate(txt, (X_pca[i, 0], X_pca[i, 1]))
-
-    # plt.xlabel('First principle component')
-    # plt.ylabel('Second principle component')
-    # plt.title('Senario center distribution after PCA with kmean = 20')
-    # plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
-
-    # tsne = TSNE(n_components=80)
-    # X_tsne = tsne.fit_transform(Input_Center)
-    
-    # for currentIndex in range(len(trainData)):
-    #     trainData[currentIndex] = NN_Input_Center[res[currentIndex]]
-    
-    # return trainData, NN_Input_Center
-
-    # Previous code for fitting DBSCAN and obtaining labels
-
-
-    # truncated_list = [sublist[:cutoffValue] for sublist in trainData]
-    # trainData = truncated_list
-
-    # global INITIAL_TEMPLATE_OBSERVATION
-    # Pcaer = PCA(INITIAL_TEMPLATE_OBSERVATION)
-    # Pcaer=Pcaer.fit_transform(trainData)
-
-    # dbscan = DBSCAN(eps=1.5, min_samples=4)
-    # dbscan.fit(Pcaer)
-    # labels = dbscan.labels_
-
-    # centers = []
-    # quantities = []
-    # unique_labels = set(labels)
-    # for label in unique_labels - {-1}:
-    #     group_indices = np.where(labels == label)[0]
-    #     group_points = Pcaer[group_indices]
-    #     center = np.mean(group_points, axis=0)  # Or use np.median for a robust center calculation
-    #     centers.append(center)
-    #     quantity = len(group_points)
-    #     quantities.append(quantity)
-    
-    # check = 0
-    # for test in range(len(labels)):
-    #     if(labels[test] == -1):
-    #         check +=1
-    # print(check)
-    # print(len(unique_labels))
-
-    # # Create bar plot
-    # plt.figure(figsize=(12, 2))
-    # x = range(len(centers))
-    # plt.grid(True, linestyle='--', alpha=0.5)
-    # plt.bar(x, quantities, color='red', hatch='*', edgecolor = "black")
-    
-
-    # # Add center IDs as x-axis labels
-    # plt.legend(["DBSCAN, 1.5, 4"])
-    # plt.xticks(x, [str(i) for i in range(len(centers))], fontsize = 6)
-
-    # # Add labels and title
-    # # plt.xlabel('Center ID', fontweight='bold')
-    # plt.ylabel('Quantity', fontweight='bold')
-
-    # # Display the plot
-    # # plt.show()
-    # plt.savefig('/Users/royli/Desktop/scatter_plot.png', dpi=300)
-
+    return outList, centersNor, labels
 
 
 def center_matching(target_list, centerList):
@@ -384,3 +185,23 @@ def center_matching(target_list, centerList):
             closest_distance = distance
             closest_list = l
     return closest_list
+
+
+def normalize_with_global_max(centers):
+    max_value = centers[0][0]
+    min_value = 1000
+
+    # Find the maximum value
+    for row in centers:
+        for value in row:
+            if value > max_value:
+                max_value = value
+            if value < min_value:
+                min_value = value
+
+    # Normalize each element
+    for i in range(len(centers)):
+        for j in range(len(centers[i])):
+            centers[i][j] = ((centers[i][j] - min_value)/(max_value - min_value))
+
+    return centers

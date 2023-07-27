@@ -1,0 +1,561 @@
+import re
+import time
+import numpy as np
+import pandas as pd
+from datetime import datetime
+import matplotlib.pyplot as plt
+from cluster import kmean_cluster, Dbscan_cluster
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import OPTICS
+from collections import Counter
+
+
+import random
+import math
+
+""" GLOBAL VARIABLE """
+
+INITIAL_TEMPLATE_OBSERVATION = -1
+
+
+def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode="query",predict_interval=6):
+    """
+    @input parameters:  log_path         -> log_file path
+                        splitting_mode   -> splitting_mode decides the way to split the queries
+                        predict_interval -> furture interval to predict
+                        
+    @output: template_storage -> A dictionary that contains all distint queries and their distint ID.
+             sequence_storage -> A dictionary contains a set of timestamps, where each timestamp records the frequency of query IDs executed during the timestamp period.
+    """
+    vaild_query_type=['select', 'SELECT', 'INSERT', 'insert', 'UPDATE', 'update', 'delete', 'DELETE']
+
+    dataSet = pd.read_csv(log_path)
+    ########################################################################################################################
+    dataSet['duration_checker'] = dataSet['message'].str.contains("duration")
+    dataSet['duration'] = dataSet['message'].str.split('ms').str[0].str.split(" ").str[1]
+    dataSet['duration'] = np.where(dataSet['duration_checker'] == True, dataSet['duration'], -1)
+    dataSet['duration'] = dataSet['duration'].astype(float)
+    dataSet['statement'] = dataSet['message'].str.split('ms').str[1].str.split("execute <unnamed>: ").str[1]
+    # dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,100,200,300,400,500,600,700,800,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"])
+    dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,500,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3"])
+    dataSet['template'] = dataSet['discrete_duration'].astype(str) +"<CHECKMARK>"+ dataSet['statement'].astype(str)
+
+    # dataSet['template'] = dataSet['statement'].astype(str)
+
+
+    """ Experimental configuration """
+    final_template = dataSet['template'].unique()
+    print(len(final_template))
+    # exit(-1)
+
+
+    """ KEY: TEMPLATE , VALUE: INDEX OF THE TEMPLATE IN PREDICTION VECTOR"""
+    TrackHash = {k: v for v, k in enumerate(final_template)}
+
+    ########################################################################################################################
+    query_group_index=0
+    row_index_rawData = 0
+    EOF_signal = False
+    sequence_storage = []
+    sequence_storage.append([0]*len(final_template))
+
+    if splitting_mode == "query":
+        while(row_index_rawData < len(dataSet)-1 or not EOF_signal):
+            # print(row_index_rawData)
+            density = random.randint(10, 30)
+            while(sum(sequence_storage[query_group_index]) < density):
+                sequence_storage[query_group_index][TrackHash[dataSet.iloc[row_index_rawData]['template']]] += 1
+                if row_index_rawData == len(dataSet)-1:
+                    EOF_signal = True
+                    break
+                else:
+                    row_index_rawData+=1
+            if not EOF_signal:  
+                sequence_storage.append([0]*len(final_template))
+                query_group_index+=1
+  
+    # print(len(sequence_storage))
+    return TrackHash,sequence_storage
+
+
+
+def nn_setup(sequence_list, time_step, sequence_storage):
+
+    feature_sequences=[]
+    label_sequence=[]
+    index_point=0
+    while index_point+time_step <= len(sequence_list)-1:
+        feature_sequences.append(sequence_storage[index_point:index_point+time_step])
+        label_sequence.append(sequence_list[index_point+time_step])
+        index_point+=1
+
+    # print(len(feature_sequences))
+    return feature_sequences, label_sequence
+
+
+def generate_training_data_initial(sequence_list, initial_value):
+       
+    global INITIAL_TEMPLATE_OBSERVATION
+    INITIAL_TEMPLATE_OBSERVATION = int(initial_value / 2)
+    currentCutOff = initial_value
+    # print(len(sequence_list))
+    for currentListIndex in range(len(sequence_list)):
+        if(sum(sequence_list[currentListIndex]) != sum(sequence_list[currentListIndex][:currentCutOff])):
+            print('starting at' + str(currentListIndex))
+            return currentListIndex
+    return len(sequence_list) - 1
+
+
+def generate_training_data(sequence_list, initial_value, cutoffPrecentage, center):
+
+    # Initial setup and center_construction #
+    startingIndex = generate_training_data_initial(sequence_list,initial_value)
+    trainningData, NN_Input_Center, Pcaer = center_construction(sequence_list[:startingIndex], initial_value, center, startingIndex+1)
+    
+    currentcutoffIndex = initial_value
+    nextcutoffIndex = -1
+    abnormalCounter = 0
+    mainCounter = startingIndex
+    # print(startingIndex)
+    for currentListIndex in range(startingIndex+1, len(sequence_list)):
+        if(sum(sequence_list[currentListIndex]) > sum(sequence_list[currentListIndex][:currentcutoffIndex])):
+            abnormalCounter += 1
+            nextcutoffIndex = max(nextcutoffIndex, [index for index, item in enumerate(sequence_list[currentListIndex]) if item != 0][-1]) + 1
+
+        # print(len(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center)))
+        trainningData.append(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center))
+        mainCounter += 1
+
+        if (abnormalCounter/mainCounter) >= cutoffPrecentage:
+            # reconsturct 
+            trainningData, NN_Input_Center, Pcaer = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center, currentListIndex)
+            # reset cutoff values
+            currentcutoffIndex = nextcutoffIndex
+            nextcutoffIndex = -1
+            abnormalCounter = 0
+
+
+    return trainningData, NN_Input_Center, Pcaer
+
+    
+            
+
+
+def center_construction(trainData, cutoffValue, NumOfCenter, currentListIndex):
+
+    truncated_list = [sublist[:cutoffValue] for sublist in trainData]
+    trainData = truncated_list
+
+    global INITIAL_TEMPLATE_OBSERVATION
+    Pcaer = PCA(1)
+    Pcaer=Pcaer.fit_transform(trainData)
+    kmeans = KMeans(n_clusters=4)
+    kmeans.fit(Pcaer)
+    # Get the labels assigned by K-means to each data point
+    labels = kmeans.labels_
+    centers = kmeans.cluster_centers_
+    counter = Counter(labels)
+
+    outList = []
+    centersNor = []
+
+    # centersNor = normalize_with_global_max(centers)
+    # for index in range(len(centers)):
+    #   centersNor.append(z_score_normalize(centers[index]))
+
+    for index in range(len(centers)):
+      centersNor.append(np.array(centers[index]))
+
+
+    # print(len(centers))
+    for currentIndex in range(len(labels)):
+        if(labels[currentIndex] == -1):
+            outList.append([0]*INITIAL_TEMPLATE_OBSERVATION)
+        else:
+            outList.append(centersNor[labels[currentIndex]])
+    
+    return outList, centersNor, Pcaer
+
+
+
+def center_matching(target_list, centerList):
+    closest_distance = math.inf
+    closest_list = None
+    for l in centerList:
+        distance = math.sqrt(sum([(a - b) ** 2 for a, b in zip(l, target_list)]))
+        if distance < closest_distance:
+            closest_distance = distance
+            closest_list = l
+    return closest_list
+
+
+def normalize_with_global_max(centers):
+    max_value = centers[0][0]
+    min_value = 1000
+
+    # Find the maximum value
+    for row in centers:
+        for value in row:
+            if value > max_value:
+                max_value = value
+            if value < min_value:
+                min_value = value
+
+    # Normalize each element
+    for i in range(len(centers)):
+        for j in range(len(centers[i])):
+            centers[i][j] = ((centers[i][j] - min_value)/(max_value - min_value))* 10000000
+
+    return centers
+
+
+def compute_l2_norm(vector):
+    l2_norm = np.linalg.norm(vector, ord=2)
+    return l2_norm
+
+def l2_normalize(vector):
+    l2_norm = compute_l2_norm(vector)
+    if l2_norm == 0:
+        return vector
+    normalized_vector = vector / l2_norm
+    return normalized_vector
+
+def z_score_normalize(vector):
+    mean = np.mean(vector)
+    std = np.std(vector)
+    normalized_vector = (vector - mean) / std
+    return normalized_vector
+
+
+
+
+
+
+#########
+
+
+
+
+import numpy as np
+from keras import models, layers, callbacks
+from keras.models import Sequential
+from keras.layers import Dense, LSTM, Dropout,SimpleRNN
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import regularizers
+from keras.losses import Loss
+import tensorflow as tf
+from sklearn.metrics.pairwise import cosine_similarity
+from keras.optimizers import Adam
+
+
+
+
+class KDNode:
+    def __init__(self, point, left=None, right=None):
+        self.point = point
+        self.left = left
+        self.right = right
+
+def build_kdtree(points, depth=0):
+    if len(points) == 0:
+        return None
+    
+    k = len(points[0])
+    axis = depth % k
+    
+    points = sorted(points, key=lambda point: point[axis])
+    median = len(points) // 2
+    
+    return KDNode(
+        point=points[median],
+        left=build_kdtree(points[:median], depth + 1),
+        right=build_kdtree(points[median + 1:], depth + 1)
+    )
+
+def euclidean_distance(point1, point2):
+    return np.sqrt(np.sum((point1 - point2) ** 2))
+
+def manhattan_distance(point1, point2):
+    return np.sum(np.abs(point1 - point2))
+
+def find_nearest_neighbor(root, target):
+    best_distance = float('inf')
+    best_point = None
+    
+    def search(node, target, depth):
+        nonlocal best_distance, best_point
+        
+        if node is None:
+            return
+        
+        axis = depth % len(target)
+        current_point = node.point
+        
+        if euclidean_distance(target, current_point) < best_distance:
+            best_distance = euclidean_distance(target, current_point)
+            best_point = current_point
+        
+        if target[axis] < current_point[axis]:
+            search(node.left, target, depth + 1)
+        else:
+            search(node.right, target, depth + 1)
+        
+        if abs(target[axis] - current_point[axis]) < best_distance:
+            if target[axis] < current_point[axis]:
+                search(node.right, target, depth + 1)
+            else:
+                search(node.left, target, depth + 1)
+    
+    search(root, target, 0)
+    
+    return best_point
+
+
+
+class LossHistory(callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+ 
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+
+class SmoothL1Loss(Loss):
+    def __init__(self, delta=1.0):
+        super(SmoothL1Loss, self).__init__()
+        self.delta = delta
+
+    def call(self, y_true, y_pred):
+        diff = y_true - y_pred
+        abs_diff = tf.abs(diff)
+        smooth_loss = tf.where(abs_diff < self.delta, 0.5 * tf.square(abs_diff), abs_diff - 0.5 * self.delta)
+        return tf.reduce_mean(smooth_loss)
+
+class HuberLoss(Loss):
+    def __init__(self, delta=1.0):
+        super(HuberLoss, self).__init__()
+        self.delta = delta
+
+    def call(self, y_true, y_pred):
+        error = y_true - y_pred
+        quadratic_loss = 0.5 * tf.square(error)
+        linear_loss = self.delta * (tf.abs(error) - 0.5 * self.delta)
+        huber_loss = tf.where(tf.abs(error) <= self.delta, quadratic_loss, linear_loss)
+        return tf.reduce_mean(huber_loss)
+
+
+
+
+def rnn_regression(feature_sequences, label_sequence,centerList):
+    feature_sequences=np.array(feature_sequences) 
+    label_sequence=np.array(label_sequence)
+
+    x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequence, test_size=0.2, random_state=0)
+
+    print(x_train.shape[1:])
+    print(y_train[0])
+    print(centerList)
+    # exit(-1)
+    rnn_cla_model = Sequential()
+    rnn_cla_model.add(LSTM(120, activation="relu", input_shape=x_train.shape[1:], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(Dropout(0.2))
+
+    rnn_cla_model.add(Dense(110, activation="relu"))
+
+
+    rnn_cla_model.add(LSTM(100, activation="relu", input_shape=x_train.shape[1:], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+
+    rnn_cla_model.add(Dense(90, activation="relu"))
+
+
+    rnn_cla_model.add(LSTM(80, activation="relu", return_sequences=False, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(Dropout(0.2))
+
+    rnn_cla_model.add(Dense(len(label_sequence[0]), activation='linear'))
+
+    rnn_cla_model.compile(loss='mse', optimizer=Adam(learning_rate=0.0001), metrics=['mae'])
+
+
+
+    rnn_cla_model.fit(x_train, y_train, epochs=300)
+
+    yPredict= rnn_cla_model.predict(x_test)
+
+    track1 = {}
+    track2 = {}
+
+
+    correctMatching = 0
+    ########## backward matching evaluation ################
+    for index in range(len(y_test)):
+        act = np.where(centerList == y_test[index])[0][0]
+        pre = find_nearest_list_index(centerList,yPredict[index])
+        if act not in track1:
+          track1[act] = 1
+        else:
+          track1[act] += 1
+
+        if pre not in track2:
+          track2[pre] = 1
+        else:
+          track2[pre] += 1
+
+        if act == pre:
+            correctMatching+=1
+        
+    print('the result acc is ' + str(correctMatching/len(y_test)))
+    print(track1)
+    print(track2)
+
+    
+
+    return rnn_cla_model.evaluate(x_test, y_test)
+
+
+
+def find_nearest_list_index(centerList, target_list):
+   
+    # Euclidean Distance
+    # nearest_index = 0
+    # nearest_distance = euclidean_distance(centerList[0], target_list)
+    # for i in range(1, len(centerList)):
+    #     distance = euclidean_distance(centerList[i], target_list)
+    #     if distance < nearest_distance:
+    #         nearest_index = i
+    #         nearest_distance = distance
+
+    # return nearest_index
+
+    # KD TREE
+    root = build_kdtree(centerList)
+    nearest_neighbor = find_nearest_neighbor(root, target_list)
+    # print(nearest_neighbor)
+    # print(np.where(centerList == nearest_neighbor)[0][0])
+    return np.where(centerList == nearest_neighbor)[0][0]
+
+
+    # cosine_similarity
+    # return_Index = -1
+    # current_sin = - 1000000
+
+    # for currentIndex in range(len(centerList)):
+    #   vector1 = np.array(centerList[currentIndex])
+    #   vector2 = np.array(target_list)
+
+
+    #   vector1 = vector1.reshape(1, -1)
+    #   vector2 = vector2.reshape(1, -1)
+
+
+    #   similarity = cosine_similarity(vector1, vector2)
+    #   if(similarity > current_sin):
+    #     return_Index = currentIndex
+    #     current_sin = similarity
+    # return return_Index
+
+
+
+
+
+#########
+
+
+from data_processor import raw_data_processor, generate_training_data, nn_setup
+# from matplotlib import pyplot as plt
+from performance_visualizer import performance_visualizer
+from sklearn.decomposition import PCA
+# from matplotlib import pyplot as plt
+from vector2vector import word_embedding
+
+from forcastor import rnn_regression
+from cluster import kmean_cluster, Dbscan_cluster
+import numpy as np
+import os
+from collections import defaultdict
+
+import matplotlib.pyplot as plt
+
+np.random.seed(0)
+
+
+
+
+def main():
+
+
+    # plt.figure(figsize=(8, 4))
+
+    # YValue = [1184, 1210, 1402, 1625, 1961, 3046, 3674]
+    # YValue_sub = [463, 469, 535, 573, 624, 801, 926]
+    # YValue_sub1 = [128, 144, 169, 202, 289, 337, 400]
+    # plt.grid(True, linestyle='--', alpha=0.5)
+    # plt.bar(range(len(YValue)), YValue, color='orange', hatch='o', edgecolor="black", label='Number of observation')
+    # plt.bar(range(len(YValue_sub)), YValue_sub, color='pink', hatch='/', edgecolor="black", label='Number of invaild vector')
+    # plt.bar(range(len(YValue_sub1)), YValue_sub1, color='green', hatch='@', edgecolor="black", label='Number of center')
+    # plt.xlabel('Center reconstruction')
+    # plt.ylabel('Number of observation')
+    # plt.xticks(range(len(YValue)), [str(i) for i in range(len(YValue))], fontsize=3)
+    # plt.legend()
+    # plt.savefig('/Users/royli/Desktop/scatter_plot3.png', dpi=300)
+    # plt.show()
+
+    # exit(-1)
+    """
+    Version: V0.6
+
+    """
+
+    template_storage = {}
+    sequence_storage = {}
+
+
+    """ For pgbench dataset"""
+    template_storage,sequence_storage=raw_data_processor("/content/inputLogClear.csv",template_storage,sequence_storage,'query',6)
+    sequenceList, NN_Input_Center, Pcaer= generate_training_data(sequence_storage, 88, 0.001,50)
+    feature_sequences, label_sequence = nn_setup(sequenceList, 10, Pcaer)
+    rnn_regression(feature_sequences, label_sequence,NN_Input_Center)
+
+
+    
+    # def create_frequency_hash_table(lst):
+    #     frequency_table = defaultdict(int)
+    #     for sublist in lst:
+    #         frequency_table[tuple(sublist)] += 1
+    #     return dict(frequency_table)
+    # testDic = create_frequency_hash_table(label_sequence)
+
+    # print(testDic.values())
+    
+
+    # print(max(testDic, key=testDic.get))
+
+    # keysT = list(testDic.keys())
+    # values = list(testDic.values())
+
+
+    # plt.figure(figsize=(12, 2))
+    # plt.bar(range(len(keysT)), values, color='green', hatch='*', edgecolor = "black")
+    # plt.xlabel('Categories')
+    # plt.ylabel('Frequencies')
+    # plt.title('Dictionary Plot')
+    # plt.xticks(range(len(keysT)), [str(i) for i in range(len(range(len(keysT))))], fontsize = 3)
+    # plt.savefig('/Users/royli/Desktop/scatter_plotX.png', dpi=300)
+
+
+    
+
+    # distinct_values = set(tuple(row) for row in NN_Input_Center)
+    # distinct_values = [list(row) for row in distinct_values]
+    # print(len(distinct_values))
+    # print(len(feature_sequences[0][0]))
+
+
+
+if __name__ == "__main__":
+    main()
+    
+
