@@ -109,19 +109,18 @@ class HuberLoss(Loss):
 
 
 
-def rnn_regression(feature_sequences, label_sequence,centerList):
-    feature_sequences=np.array(feature_sequences) 
-    label_sequence=np.array(label_sequence)
+def rnn_regression(feature_sequences, label_sequence):
+    feature_sequences=np.array(feature_sequences, dtype=object) 
+    label_sequence=np.array(label_sequence, dtype=object)
 
     x_train, x_test, y_train, y_test = train_test_split(feature_sequences, label_sequence, test_size=0.2, random_state=0)
 
-    print(x_train.shape[1:])
-    print(y_train[0])
+
     rnn_cla_model = Sequential()
-    rnn_cla_model.add(SimpleRNN(120, activation="relu", input_shape=x_train.shape[1:], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(SimpleRNN(120, activation="relu", input_shape=[len(x_train[0]), len(x_train[0][0])], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(100, activation="relu", input_shape=x_train.shape[1:], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(SimpleRNN(100, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
 
     rnn_cla_model.add(SimpleRNN(80, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
@@ -143,38 +142,17 @@ def rnn_regression(feature_sequences, label_sequence,centerList):
     rnn_cla_model.compile(loss='mae', optimizer=Adam(learning_rate=0.001), metrics=['mae'])
 
 
-
+    x_train=np.array(x_train, dtype=object)
+    y_train=np.array(y_train, dtype=object) 
+    print(type(x_train))
+    print(type(x_train[0]))
+    print(type(x_train[0][0]))
+    print(type(y_train))
+    print(type(y_train[0]))
+    print(y_train[0])
+    x_train = x_train.astype(np.float32)
+    y_train = y_train.astype(np.float32)
     rnn_cla_model.fit(x_train, y_train, epochs=100, batch_size = 16)
-
-    yPredict= rnn_cla_model.predict(x_test)
-
-    track1 = {}
-    track2 = {}
-
-
-    correctMatching = 0
-    ########## backward matching evaluation ################
-    for index in range(len(y_test)):
-        act = np.where(centerList == y_test[index])[0][0]
-        pre = find_nearest_list_index(centerList,yPredict[index])
-        if act not in track1:
-          track1[act] = 1
-        else:
-          track1[act] += 1
-
-        if pre not in track2:
-          track2[pre] = 1
-        else:
-          track2[pre] += 1
-
-        if act == pre:
-            correctMatching+=1
-        
-    print('the result acc is ' + str(correctMatching/len(y_test)))
-    print(track1)
-    print(track2)
-
-    
 
     return rnn_cla_model.evaluate(x_test, y_test)
 

@@ -1,17 +1,6 @@
-from data_processor import raw_data_processor, generate_training_data, nn_setup
-# from matplotlib import pyplot as plt
-from performance_visualizer import performance_visualizer
-from sklearn.decomposition import PCA
-# from matplotlib import pyplot as plt
-from vector2vector import word_embedding
-
+from data_processor import raw_data_processor , nn_setup
 from forcastor import rnn_regression
-from cluster import kmean_cluster, Dbscan_cluster
 import numpy as np
-import os
-from collections import defaultdict
-
-import matplotlib.pyplot as plt
 
 np.random.seed(0)
 
@@ -21,7 +10,7 @@ np.random.seed(0)
 def main():
 
     """
-    Version: V0.6
+    Version: V0.7
 
     """
 
@@ -29,17 +18,9 @@ def main():
     sequence_storage = {}
 
 
-    """ For pgbench dataset"""
-    template_storage,sequence_storage=raw_data_processor("/Users/royli/Desktop/mldb/inputLogClear.csv",template_storage,sequence_storage,'query',6)
-    sequenceList, NN_Input_Center, labels = generate_training_data(sequence_storage, 88, 1,50)
-    # feature_sequences, label_sequence = nn_setup(sequenceList, 10, NN_Input_Center, labels)
-    # plt.plot(sequenceList[:1000])
-    # plt.show()
-    print(NN_Input_Center)
-    print(len(sequenceList))
-    # plt.savefig('/content/plot.png')
-
-    # rnn_regression(feature_sequences, label_sequence,NN_Input_Center)
+    NN_input_3D_list=raw_data_processor("/Users/royli/Desktop/mldb/inputLogClear.csv",template_storage,sequence_storage,'query',6)
+    feature_sequences, label_sequence = nn_setup(NN_input_3D_list)
+    rnn_regression(feature_sequences, label_sequence)
 
 
   

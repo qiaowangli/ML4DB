@@ -13,15 +13,98 @@ from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
 from sklearn.cluster import OPTICS
 from collections import Counter
-
-
+import matplotlib.pyplot as plt
 import random
 import math
 
-""" GLOBAL VARIABLE """
+
 
 INITIAL_TEMPLATE_OBSERVATION = -1
 
+def split_list_into_chunks(A, k, stepK = True):
+    if k <= 0 or not isinstance(k, int):
+        raise ValueError("k must be a positive integer")
+
+    if len(A) < k:
+        raise ValueError("k must be less than or equal to the length of the input list")
+    
+    if stepK:
+        A = A.tolist()  # Convert the Pandas Series to a Python list
+
+    result = [A[i:i + k] for i in range(len(A) - k + 1)]
+    return result
+
+
+def count_element_frequency_in_2d_list(A):
+
+    result_dict = {element: [] for sublist in A for element in sublist}
+    keys_list = list(result_dict.keys())
+
+    for lst in A:
+        for element in keys_list:
+                result_dict[element].append(lst.count(element))
+    return result_dict
+
+
+
+
+
+
+def analyze_top_keys_variation(data_list, TOP_RANK):
+
+    TOP_RANK = TOP_RANK
+    variations = []
+    resList = []
+
+    for data in data_list:
+        input_dict = count_element_frequency_in_2d_list(data)
+        top_5_keys = sorted(input_dict, key=lambda x: sum(input_dict[x]), reverse=True)[:TOP_RANK]
+        
+        if variations:
+            common_keys = set(variations[-1]).intersection(top_5_keys)
+            # print(common_keys)
+            variation_count = TOP_RANK - len(common_keys)
+        else:
+            variation_count = 0
+
+        variations.append(top_5_keys)
+        resList.append(variation_count)
+
+        # print("Top 5 Keys:", top_5_keys)
+        print("Variation Count:", variation_count)
+        print("---------------------------------")
+    
+    x_axis = range(1, len(data_list) + 1)
+    plt.plot(x_axis, resList, marker='o')
+    plt.xlabel('Data Group')
+    plt.ylabel('Top 5 Keys Variation Count')
+    plt.title('Top {} Keys Variation in {} Groups'.format(TOP_RANK, len(data_list)))
+    plt.show()
+
+
+def create_NN_input(data_list, TOP_RANK):
+
+    TOP_RANK = TOP_RANK
+    singleTreatment = []
+    returnList = []
+
+    for data in data_list:
+        input_dict = count_element_frequency_in_2d_list(data)
+        top_keys = sorted(input_dict, key=lambda x: sum(input_dict[x]), reverse=True)[:TOP_RANK]
+        singleTreatment = []
+        for singleVector in data:
+            tmpList = []
+            for top_key in top_keys:
+                tmpList.append(singleVector.count(top_key))
+            while len(tmpList) < TOP_RANK:
+                tmpList.append(0)
+            singleTreatment.append(tmpList)
+        returnList.append(singleTreatment) 
+    return returnList
+
+
+            
+        
 
 def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode="query",predict_interval=6):
     """
@@ -35,173 +118,62 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
     vaild_query_type=['select', 'SELECT', 'INSERT', 'insert', 'UPDATE', 'update', 'delete', 'DELETE']
 
     dataSet = pd.read_csv(log_path)
+    print(len(dataSet))
     ########################################################################################################################
-    dataSet['duration_checker'] = dataSet['message'].str.contains("duration")
-    dataSet['duration'] = dataSet['message'].str.split('ms').str[0].str.split(" ").str[1]
-    dataSet['duration'] = np.where(dataSet['duration_checker'] == True, dataSet['duration'], -1)
+
+    # Step 1: Extract 'duration' and 'statement' columns
+    extracted_data = dataSet['message'].str.extract(r'duration:\s*(\d+(\.\d+)?)\s+ms\s+execute(.*)', expand=True)
+    dataSet['duration'] = extracted_data[0].fillna(0)
+    dataSet['statement'] = extracted_data[2].fillna("MARKER")
+
+    # Step 2: Convert 'duration' to float and replace NaN with -1
     dataSet['duration'] = dataSet['duration'].astype(float)
-    dataSet['statement'] = dataSet['message'].str.split('ms').str[1].str.split("execute <unnamed>: ").str[1]
-    # dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,100,200,300,400,500,600,700,800,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3","C4","C5","C6","C7","C8","C9","C10"])
-    dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=[-2,0,500,900,dataSet['duration'].max()], labels=["C-1","C1","C2","C3"])
-    dataSet['template'] = dataSet['discrete_duration'].astype(str) +"<CHECKMARK>"+ dataSet['statement'].astype(str)
 
-    # dataSet['template'] = dataSet['statement'].astype(str)
+    # Step 3: Create 'discrete_duration' column using pd.cut()
+    bins = [-2, 0, 500, 900, dataSet['duration'].max()]
+    # print(dataSet['duration'].max())
+    labels = ["C-1", "C1", "C2", "C3"]
+    dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=bins, labels=labels)
 
-
-    """ Experimental configuration """
-    final_template = dataSet['template'].unique()
-    print(len(final_template))
-    # exit(-1)
-
-
-    """ KEY: TEMPLATE , VALUE: INDEX OF THE TEMPLATE IN PREDICTION VECTOR"""
-    TrackHash = {k: v for v, k in enumerate(final_template)}
+    # Step 4: Create 'template' column by combining 'discrete_duration' and 'statement'
+    dataSet['template'] = dataSet['discrete_duration'].astype(str) + "<CHECKMARK>" + dataSet['statement'].astype(str)
 
     ########################################################################################################################
-    query_group_index=0
-    row_index_rawData = 0
-    EOF_signal = False
-    sequence_storage = []
-    sequence_storage.append([0]*len(final_template))
+    # New approach starting here
+    ########################################################################################################################
 
-    if splitting_mode == "query":
-        while(row_index_rawData < len(dataSet)-1 or not EOF_signal):
-            # print(row_index_rawData)
-            density = random.randint(80, 100)
-            while(sum(sequence_storage[query_group_index]) < density):
-                sequence_storage[query_group_index][TrackHash[dataSet.iloc[row_index_rawData]['template']]] += 1
-                if row_index_rawData == len(dataSet)-1:
-                    EOF_signal = True
-                    break
-                else:
-                    row_index_rawData+=1
-            if not EOF_signal:  
-                sequence_storage.append([0]*len(final_template))
-                query_group_index+=1
-  
-    # print(len(sequence_storage))
-    return TrackHash,sequence_storage
+    # HYPER PARAMETER
+
+    """ The number of template in a single time duration"""
+    K = 100
+
+    """ The number of K in a single RNN forcasting """
+    G = 20
+
+    """ The number of ranked Sequences [The vertical input of RNN] """
+    TOP_RANK = 10
+
+    A_slash = split_list_into_chunks(dataSet['template'], K)
+    A_slash_slash = split_list_into_chunks(A_slash, G, False)
+
+    # analyze_top_keys_variation(A_slash_slash, 100)
+
+    """ 
+    we now extract the tranning test from A_slash_slash
+
+    The output is a 3D list -> [ [   [A single vector where length = TOP_RANK]   ] <- A single dataset for RNN where length = G       ]
+    """
+    return create_NN_input(A_slash_slash[:2000],TOP_RANK)
 
 
 
-def nn_setup(sequence_list, time_step, NN_Input_Center, labels):
+def nn_setup(sequence_list):
 
     feature_sequences=[]
     label_sequence=[]
-    index_point=0
-    while index_point+time_step <= len(sequence_list)-1:
-        feature_sequences.append(sequence_list[index_point:index_point+time_step])
-        label_sequence.append(NN_Input_Center[labels[index_point+time_step]])
-        index_point+=1
-
-    # print(len(feature_sequences))
+    for subList in sequence_list:
+        feature_sequences.append(subList[:len(subList)-1])
+        label_sequence.append(subList[-1])
     return feature_sequences, label_sequence
-
-
-def generate_training_data_initial(sequence_list, initial_value):
-       
-    global INITIAL_TEMPLATE_OBSERVATION
-    INITIAL_TEMPLATE_OBSERVATION = int(initial_value / 2)
-    currentCutOff = initial_value
-    for currentListIndex in range(len(sequence_list)):
-        if(sum(sequence_list[currentListIndex]) != sum(sequence_list[currentListIndex][:currentCutOff])):
-            print('starting at' + str(currentListIndex))
-            return currentListIndex
-    return len(sequence_list) - 1
-
-
-def generate_training_data(sequence_list, initial_value, cutoffPrecentage, center):
-
-    # Initial setup and center_construction #
-    startingIndex = generate_training_data_initial(sequence_list,initial_value)
-    trainningData, NN_Input_Center, labels = center_construction(sequence_list[:startingIndex], initial_value, center, startingIndex+1)
-    
-    currentcutoffIndex = initial_value
-    nextcutoffIndex = -1
-    abnormalCounter = 0
-    mainCounter = startingIndex
-    # print(startingIndex)
-    for currentListIndex in range(startingIndex+1, len(sequence_list)):
-        print('dsdsadsadasdsadsadasdasdasdasdasds')
-        if(sum(sequence_list[currentListIndex]) > sum(sequence_list[currentListIndex][:currentcutoffIndex])):
-            abnormalCounter += 1
-            nextcutoffIndex = max(nextcutoffIndex, [index for index, item in enumerate(sequence_list[currentListIndex]) if item != 0][-1]) + 1
-
-        trainningData.append(center_matching(sequence_list[currentListIndex][:currentcutoffIndex], NN_Input_Center))
-        mainCounter += 1
-
-        if (abnormalCounter/mainCounter) >= cutoffPrecentage:
-            # reconsturct 
-            trainningData, NN_Input_Center, labels = center_construction(sequence_list[:currentListIndex], nextcutoffIndex, center, currentListIndex)
-            # reset cutoff values
-            currentcutoffIndex = nextcutoffIndex
-            nextcutoffIndex = -1
-            abnormalCounter = 0
-
-
-    return trainningData, NN_Input_Center, labels
-
     
             
-
-
-def center_construction(trainData, cutoffValue, NumOfCenter, currentListIndex):
-
-    truncated_list = [sublist[:cutoffValue] for sublist in trainData]
-    trainData = truncated_list
-
-    global INITIAL_TEMPLATE_OBSERVATION
-    Pcaer = PCA(10)
-    Pcaer=Pcaer.fit_transform(trainData)
-
-    kmeans = KMeans(n_clusters=4)
-    kmeans.fit(Pcaer)
-    # Get the labels assigned by K-means to each data point
-    labels = kmeans.labels_
-    centers = kmeans.cluster_centers_
-
-    outList = []
-
-    # centersNor = normalize_with_global_max(centers)
-
-    centersNor = centers
-
-    for currentIndex in range(len(labels)):
-        if(labels[currentIndex] == -1):
-            outList.append([0]*INITIAL_TEMPLATE_OBSERVATION)
-        else:
-            # outList.append(centersNor[labels[currentIndex]])
-            outList.append(Pcaer[currentIndex])
-    
-    return outList, centersNor, labels
-
-
-def center_matching(target_list, centerList):
-    closest_distance = math.inf
-    closest_list = None
-    for l in centerList:
-        distance = math.sqrt(sum([(a - b) ** 2 for a, b in zip(l, target_list)]))
-        if distance < closest_distance:
-            closest_distance = distance
-            closest_list = l
-    return closest_list
-
-
-def normalize_with_global_max(centers):
-    max_value = centers[0][0]
-    min_value = 1000
-
-    # Find the maximum value
-    for row in centers:
-        for value in row:
-            if value > max_value:
-                max_value = value
-            if value < min_value:
-                min_value = value
-
-    # Normalize each element
-    for i in range(len(centers)):
-        for j in range(len(centers[i])):
-            centers[i][j] = ((centers[i][j] - min_value)/(max_value - min_value))
-
-    return centers
