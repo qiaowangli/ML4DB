@@ -139,11 +139,13 @@ def rnn_regression(feature_sequences, label_sequence):
 
     rnn_cla_model.add(Dense(len(label_sequence[0]), activation='linear'))
 
-    rnn_cla_model.compile(loss='mae', optimizer=Adam(learning_rate=0.001), metrics=['mae'])
+    rnn_cla_model.compile(loss='mae', optimizer=Adam(), metrics=['mae'])
 
 
     x_train=np.array(x_train, dtype=object)
-    y_train=np.array(y_train, dtype=object) 
+    y_train=np.array(y_train, dtype=object)
+    x_test=np.array(x_test, dtype=object)
+    y_test=np.array(y_test, dtype=object) 
     print(type(x_train))
     print(type(x_train[0]))
     print(type(x_train[0][0]))
@@ -152,7 +154,9 @@ def rnn_regression(feature_sequences, label_sequence):
     print(y_train[0])
     x_train = x_train.astype(np.float32)
     y_train = y_train.astype(np.float32)
-    rnn_cla_model.fit(x_train, y_train, epochs=100, batch_size = 16)
+    x_test=np.array(x_test, dtype=object)
+    y_test=np.array(y_test, dtype=object) 
+    rnn_cla_model.fit(x_train, y_train, epochs=10, batch_size = 32)
 
     return rnn_cla_model.evaluate(x_test, y_test)
 
