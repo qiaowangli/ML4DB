@@ -1,10 +1,34 @@
 from data_processor import raw_data_processor , nn_setup
 from forcastor import rnn_regression
 import numpy as np
+import matplotlib.pyplot as plt
+import csv
 
 np.random.seed(0)
 
 
+
+def plot_label_sequence(label_sequence):
+    num_positions = len(label_sequence[0])
+
+    plt.figure(figsize=(8, 6))
+
+    for position in range(num_positions):
+        values_at_position = [line[position] for line in label_sequence]
+        plt.plot(range(1, len(label_sequence) + 1), values_at_position, label=f'Position {position+1}')
+
+    with open('label_sequence_dataBig.csv', 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile)
+        for position in range(num_positions):
+            values_at_position = [line[position] for line in label_sequence]
+            csv_writer.writerow(['Position {}'.format(position+1)] + values_at_position)
+
+    plt.xlabel('Line')
+    plt.ylabel('Value')
+    plt.title('Label Sequence')
+    plt.legend(loc='upper left', bbox_to_anchor=(1.0, 1.0))
+    plt.grid(True)
+    plt.show()
 
 
 def main():
@@ -14,13 +38,23 @@ def main():
 
     """
 
-    template_storage = {}
-    sequence_storage = {}
+    """ The number of template in a single time duration"""
+    K = 100
 
+    """ The number of K in a single RNN forcasting """
+    G = 20
 
-    NN_input_3D_list=raw_data_processor("/Users/royli/Desktop/mldb/inputLogClear.csv",template_storage,sequence_storage,'query',6)
+    """ The number of ranked Sequences [The vertical input of RNN] """
+    TOP_RANK = 10
+
+    NN_input_3D_list=raw_data_processor("/Users/royli/Desktop/mldb/inputLogClear.csv", K, G, TOP_RANK, False)
     feature_sequences, label_sequence = nn_setup(NN_input_3D_list)
-    rnn_regression(feature_sequences, label_sequence)
+
+    # print(label_sequence)
+    # label_sequence = [[1, 2], [2, 4]]
+    plot_label_sequence(label_sequence)
+
+    # rnn_regression(feature_sequences, label_sequence)
 
 
   

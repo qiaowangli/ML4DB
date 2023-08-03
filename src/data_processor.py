@@ -106,7 +106,7 @@ def create_NN_input(data_list, TOP_RANK):
             
         
 
-def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode="query",predict_interval=6):
+def raw_data_processor(log_path, K, G, TOP_RANK, isASmallTest):
     """
     @input parameters:  log_path         -> log_file path
                         splitting_mode   -> splitting_mode decides the way to split the queries
@@ -144,15 +144,6 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
 
     # HYPER PARAMETER
 
-    """ The number of template in a single time duration"""
-    K = 100
-
-    """ The number of K in a single RNN forcasting """
-    G = 20
-
-    """ The number of ranked Sequences [The vertical input of RNN] """
-    TOP_RANK = 10
-
     A_slash = split_list_into_chunks(dataSet['template'], K)
     A_slash_slash = split_list_into_chunks(A_slash, G, False)
 
@@ -163,7 +154,10 @@ def raw_data_processor(log_path,template_storage,sequence_storage,splitting_mode
 
     The output is a 3D list -> [ [   [A single vector where length = TOP_RANK]   ] <- A single dataset for RNN where length = G       ]
     """
-    return create_NN_input(A_slash_slash[:2000],TOP_RANK)
+    if isASmallTest:
+        return create_NN_input(A_slash_slash[:2000],TOP_RANK)
+    else:
+        return create_NN_input(A_slash_slash,TOP_RANK)
 
 
 
