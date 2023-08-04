@@ -10,6 +10,8 @@ from keras.losses import Loss
 import tensorflow as tf
 from sklearn.metrics.pairwise import cosine_similarity
 from keras.optimizers import Adam
+import csv
+import pandas as pd
 
 
 
@@ -151,7 +153,32 @@ def rnn_regression(feature_sequences, label_sequence):
     x_test= x_test.astype(np.float32)
     y_test= y_test.astype(np.float32)
 
-    rnn_cla_model.fit(x_train, y_train, epochs=10, batch_size = 32)
+    EP = 10
+    
+    MLDB_model = rnn_cla_model.fit(x_train, y_train, validation_split=0.2,epochs=EP, batch_size = 32)
+
+    loss_data = {
+        'epoch': np.arange(1, int(EP+1)),
+        'training_loss': MLDB_model.history['loss'],
+        'validation_loss': MLDB_model.history['val_loss'],
+    }
+
+    df = pd.DataFrame(loss_data)
+    df.to_csv('loss_data.csv', index=False)
+
+    eva_res = rnn_cla_model.predict(x_test)
+
+    with open('predictions.csv', 'w', newline='') as csvfile:
+      csv_writer = csv.writer(csvfile)
+
+
+      header = ['Sample'] + [f'Prediction_{i}' for i in range(1, eva_res.shape[1]+1)] + [f'Actual_{i}' for i in range(1, y_test.shape[1]+1)]
+      csv_writer.writerow(header)
+
+      for i, (prediction, actual_result) in enumerate(zip(eva_res, y_test)):
+          row = [f'Test Sample {i+1}'] + prediction.tolist() + actual_result.tolist()
+          csv_writer.writerow(row)
+
 
     return rnn_cla_model.evaluate(x_test, y_test)
 
