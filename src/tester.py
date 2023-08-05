@@ -48,9 +48,9 @@ def main():
     G = 20
 
     """ The number of ranked Sequences [The vertical input of RNN] """
-    TOP_RANK = 100
+    TOP_RANK = 10
 
-    NN_input_3D_list=raw_data_processor("/home/ubuntu/ML4DB/inputLogClear.csv", K, G, TOP_RANK, False)
+    NN_input_3D_list=raw_data_processor("/Users/royli/Desktop/ML4DB/inputLogClear.csv", K, G, TOP_RANK, False)
     feature_sequences, label_sequence = nn_setup(NN_input_3D_list)
 
     # print(label_sequence)
