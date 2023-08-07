@@ -119,24 +119,24 @@ def rnn_regression(feature_sequences, label_sequence):
 
 
     rnn_cla_model = Sequential()
-    rnn_cla_model.add(SimpleRNN(120, activation="relu", input_shape=[len(x_train[0]), len(x_train[0][0])], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(120, activation="relu", input_shape=[len(x_train[0]), len(x_train[0][0])], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(100, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(100, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
 
-    rnn_cla_model.add(SimpleRNN(80, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(80, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
     
-    rnn_cla_model.add(SimpleRNN(60, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(60, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(40, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(40, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(20, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(20, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(10, activation="relu", return_sequences=False, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(10, activation="relu", return_sequences=False, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
     rnn_cla_model.add(Dense(len(label_sequence[0]), activation='linear'))
