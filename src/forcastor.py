@@ -3,7 +3,7 @@
 import numpy as np
 from keras import models, layers, callbacks
 from keras.models import Sequential
-from keras.layers import Dense, LSTM, Dropout,SimpleRNN
+from keras.layers import Dense, LSTM, Dropout,SimpleRNN, GRU
 from sklearn.model_selection import train_test_split
 from tensorflow.keras import regularizers
 from keras.losses import Loss
@@ -12,6 +12,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from keras.optimizers import Adam
 import csv
 import pandas as pd
+
+
+
 
 
 
@@ -78,12 +81,22 @@ def find_nearest_neighbor(root, target):
 
 
 
-class LossHistory(callbacks.Callback):
-    def on_train_begin(self, logs={}):
-        self.losses = []
- 
-    def on_batch_end(self, batch, logs={}):
-        self.losses.append(logs.get('loss'))
+
+
+
+class QuantileRegressionLoss(tf.keras.losses.Loss):
+    # the default is MAE / 2
+
+    def __init__(self, tau = 0.5):
+        super(QuantileRegressionLoss, self).__init__()
+        self.tau = tau
+
+    def call(self, y_true, y_pred):
+        residual = y_true - y_pred
+        loss = tf.maximum((self.tau - 1) * 10*(residual), self.tau * 10*(residual))
+        return tf.reduce_mean(loss)
+
+
 
 class SmoothL1Loss(Loss):
     def __init__(self, delta=1.0):
@@ -107,6 +120,24 @@ class HuberLoss(Loss):
         linear_loss = self.delta * (tf.abs(error) - 0.5 * self.delta)
         huber_loss = tf.where(tf.abs(error) <= self.delta, quadratic_loss, linear_loss)
         return tf.reduce_mean(huber_loss)
+
+
+
+class RelativeErrorLoss(tf.keras.losses.Loss):
+    def __init__(self):
+        super().__init__()
+
+    def call(self, y_true, y_pred):
+        relative_error = tf.abs(((y_true - y_pred) + 0.00001) / (y_true + 0.00001))
+        average_y_true = tf.reduce_mean(y_true)
+        average_relative_error = tf.reduce_mean(relative_error)
+        return average_relative_error * average_y_true
+
+
+
+
+
+
 
 
 
@@ -139,9 +170,10 @@ def rnn_regression(feature_sequences, label_sequence):
     rnn_cla_model.add(SimpleRNN(10, activation="relu", return_sequences=False, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
+    # rnn_cla_model.add(Dense(len(label_sequence[0]), activation='relu'))
     rnn_cla_model.add(Dense(len(label_sequence[0]), activation='linear'))
 
-    rnn_cla_model.compile(loss='mae', optimizer=Adam(), metrics=['mae'])
+    rnn_cla_model.compile(loss=RelativeErrorLoss(), optimizer=Adam(), metrics=['mae'])
 
 
     x_train=np.array(x_train, dtype=object)
@@ -155,7 +187,7 @@ def rnn_regression(feature_sequences, label_sequence):
 
     EP = 10
     
-    MLDB_model = rnn_cla_model.fit(x_train, y_train, validation_split=0.2,epochs=EP, batch_size = 32)
+    MLDB_model = rnn_cla_model.fit(x_train, y_train, validation_split=0.2,epochs=EP)
 
     loss_data = {
         'epoch': np.arange(1, int(EP+1)),

@@ -127,7 +127,7 @@ def create_NN_input(data_list, TOP_RANK):
 
 
 def create_NN_input_with_constant_TOP_RANK(data_list, TOP_RANK):
-    top_keys = extract_stable_top_rank(data_list, 1000, TOP_RANK)
+    top_keys = extract_stable_top_rank(data_list, 10000, TOP_RANK)
 
     singleTreatment = []
     returnList = []
@@ -200,6 +200,9 @@ def raw_data_processor(log_path, K, G, TOP_RANK, isASmallTest):
     #     return create_NN_input(A_slash_slash,TOP_RANK)
 
     # return create_NN_input(A_slash_slash[:2000],TOP_RANK)
+
+
+    # return create_NN_input(A_slash_slash,TOP_RANK)
     return create_NN_input_with_constant_TOP_RANK(A_slash_slash,TOP_RANK)
 
 
