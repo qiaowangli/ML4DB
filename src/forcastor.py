@@ -84,17 +84,7 @@ def find_nearest_neighbor(root, target):
 
 
 
-class QuantileRegressionLoss(tf.keras.losses.Loss):
-    # the default is MAE / 2
 
-    def __init__(self, tau = 0.5):
-        super(QuantileRegressionLoss, self).__init__()
-        self.tau = tau
-
-    def call(self, y_true, y_pred):
-        residual = y_true - y_pred
-        loss = tf.maximum((self.tau - 1) * 10*(residual), self.tau * 10*(residual))
-        return tf.reduce_mean(loss)
 
 
 
@@ -124,14 +114,38 @@ class HuberLoss(Loss):
 
 
 class RelativeErrorLoss(tf.keras.losses.Loss):
-    def __init__(self):
+    def __init__(self, tau = 0.5):
         super().__init__()
+        self.tau = tau
 
     def call(self, y_true, y_pred):
         relative_error = tf.abs(((y_true - y_pred) + 0.00001) / (y_true + 0.00001))
-        average_y_true = tf.reduce_mean(y_true)
-        average_relative_error = tf.reduce_mean(relative_error)
-        return average_relative_error * average_y_true
+        
+        
+        residual = y_true - y_pred
+        loss = tf.maximum((self.tau - 1) * 10*(residual), self.tau * 10*(residual))
+
+        total = loss * relative_error
+
+        return tf.reduce_mean(total)
+
+
+
+        # average_y_true = tf.reduce_mean(y_true)
+        # average_relative_error = tf.reduce_mean(relative_error)
+        # return average_relative_error * average_y_true
+
+class QuantileRegressionLoss(tf.keras.losses.Loss):
+    # the default is MAE / 2
+
+    def __init__(self, tau = 0.5):
+        super(QuantileRegressionLoss, self).__init__()
+        self.tau = tau
+
+    def call(self, y_true, y_pred):
+        residual = y_true - y_pred
+        loss = tf.maximum((self.tau - 1) * 10*(residual), self.tau * 10*(residual))
+        return tf.reduce_mean(loss)
 
 
 
