@@ -42,13 +42,13 @@ def main():
     """
 
     """ The number of template in a single time duration"""
-    K = 1000
+    K = 800
 
     """ The number of K in a single RNN forcasting """
-    G = 4
+    G = 20
 
     """ The number of ranked Sequences [The vertical input of RNN] """
-    TOP_RANK = 10
+    TOP_RANK = 50
 
     NN_input_3D_list=raw_data_processor("/home/ubuntu/ML4DB/inputLogClear.csv", K, G, TOP_RANK, False)
     feature_sequences, label_sequence = nn_setup(NN_input_3D_list)

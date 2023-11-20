@@ -16,6 +16,8 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import random
 import math
+from collections import Counter
+
 
 
 
@@ -100,7 +102,7 @@ def analyze_top_keys_variation(data_list, TOP_RANK):
     x_axis = range(1, len(data_list) + 1)
     plt.plot(x_axis, resList, marker='o')
     plt.xlabel('Data Group')
-    plt.ylabel('Top 5 Keys Variation Count')
+    plt.ylabel('Top  Keys Variation Count')
     plt.title('Top {} Keys Variation in {} Groups'.format(TOP_RANK, len(data_list)))
     plt.show()
 
@@ -128,6 +130,7 @@ def create_NN_input(data_list, TOP_RANK):
 
 def create_NN_input_with_constant_TOP_RANK(data_list, TOP_RANK):
     top_keys = extract_stable_top_rank(data_list, 10000, TOP_RANK)
+    top_keys_set = set(top_keys)
 
     singleTreatment = []
     returnList = []
@@ -135,9 +138,11 @@ def create_NN_input_with_constant_TOP_RANK(data_list, TOP_RANK):
     for data in data_list:
         singleTreatment = []
         for singleVector in data:
-            tmpList = []
-            for top_key in top_keys:
-                tmpList.append(singleVector.count(top_key))
+            # tmpList = []
+            vector_counter = Counter(singleVector) 
+            tmpList = [vector_counter[key] for key in top_keys if key in top_keys_set]
+            # for top_key in top_keys:
+            #     tmpList.append(singleVector.count(top_key))
             singleTreatment.append(tmpList)
         returnList.append(singleTreatment) 
     return returnList
@@ -187,6 +192,8 @@ def raw_data_processor(log_path, K, G, TOP_RANK, isASmallTest):
 
     A_slash, fre_hashTable = split_list_into_chunks(dataSet['template'], K)
     A_slash_slash = split_list_into_chunks(A_slash, G, False)
+
+
     # analyze_top_keys_variation(A_slash_slash, 100)
 
     """ 

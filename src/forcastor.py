@@ -12,6 +12,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from keras.optimizers import Adam
 import csv
 import pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.kernel_ridge import KernelRidge
+
 
 
 
@@ -99,19 +102,6 @@ class SmoothL1Loss(Loss):
         smooth_loss = tf.where(abs_diff < self.delta, 0.5 * tf.square(abs_diff), abs_diff - 0.5 * self.delta)
         return tf.reduce_mean(smooth_loss)
 
-class HuberLoss(Loss):
-    def __init__(self, delta=1.0):
-        super(HuberLoss, self).__init__()
-        self.delta = delta
-
-    def call(self, y_true, y_pred):
-        error = y_true - y_pred
-        quadratic_loss = 0.5 * tf.square(error)
-        linear_loss = self.delta * (tf.abs(error) - 0.5 * self.delta)
-        huber_loss = tf.where(tf.abs(error) <= self.delta, quadratic_loss, linear_loss)
-        return tf.reduce_mean(huber_loss)
-
-
 
 class RelativeErrorLoss(tf.keras.losses.Loss):
     def __init__(self, tau = 0.5):
@@ -131,9 +121,27 @@ class RelativeErrorLoss(tf.keras.losses.Loss):
 
 
 
-        # average_y_true = tf.reduce_mean(y_true)
-        # average_relative_error = tf.reduce_mean(relative_error)
-        # return average_relative_error * average_y_true
+class WeightedMAELoss(tf.keras.losses.Loss):
+    def __init__(self, sequence_length=50, weight_increase_rate=1.0):
+        super().__init__()
+        self.sequence_length = sequence_length
+        self.weight_increase_rate = weight_increase_rate
+
+    def call(self, y_true, y_pred):
+        weights = tf.linspace(1.0, self.weight_increase_rate * self.sequence_length, self.sequence_length)
+        
+        error = tf.abs(y_true - y_pred)
+
+        weighted_error = error * tf.expand_dims(weights, 0)  
+
+        weighted_mae = tf.reduce_sum(weighted_error, axis=-1) / tf.reduce_sum(weights)
+        
+        return tf.reduce_mean(weighted_mae)
+
+    
+
+
+
 
 class QuantileRegressionLoss(tf.keras.losses.Loss):
     # the default is MAE / 2
@@ -150,11 +158,39 @@ class QuantileRegressionLoss(tf.keras.losses.Loss):
 
 
 
+########## BASELINE MODEL.  ####################
+
+def linear_regression(train_2d_data):
+    X = []
+    y = []
+    for i in range(len(train_2d_data)-1):
+        for j in range(len(train_2d_data[i])):
+            X.append(train_2d_data[i])
+            y.append(train_2d_data[i+1][j])
+
+    model = LinearRegression()
+    model.fit(X, y)
+    return model
+
+def kernel_regression(train_2d_data):
+    X = []
+    y = []
+    for i in range(len(train_2d_data)-1):
+        for j in range(len(train_2d_data[i])):
+            X.append(train_2d_data[i])
+            y.append(train_2d_data[i+1][j])
+
+    model = KernelRidge()
+    model.fit(X, y)
+    return model
 
 
 
 
 
+
+
+########## RNN MODEL.  ####################
 
 def rnn_regression(feature_sequences, label_sequence):
     feature_sequences=np.array(feature_sequences, dtype=object) 
@@ -164,30 +200,31 @@ def rnn_regression(feature_sequences, label_sequence):
 
 
     rnn_cla_model = Sequential()
-    rnn_cla_model.add(SimpleRNN(120, activation="relu", input_shape=[len(x_train[0]), len(x_train[0][0])], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(120, activation="relu", input_shape=[len(x_train[0]), len(x_train[0][0])], return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
     rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(100, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    rnn_cla_model.add(LSTM(100, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
 
-    rnn_cla_model.add(SimpleRNN(80, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
-    rnn_cla_model.add(Dropout(0.2))
+    # rnn_cla_model.add(LSTM(80, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    # rnn_cla_model.add(Dropout(0.2))
     
-    rnn_cla_model.add(SimpleRNN(60, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
-    rnn_cla_model.add(Dropout(0.2))
+    # rnn_cla_model.add(LSTM(60, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    # rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(40, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
-    rnn_cla_model.add(Dropout(0.2))
+    # rnn_cla_model.add(LSTM(40, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    # rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(20, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
-    rnn_cla_model.add(Dropout(0.2))
+    # rnn_cla_model.add(LSTM(20, activation="relu", return_sequences=True, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    # rnn_cla_model.add(Dropout(0.2))
 
-    rnn_cla_model.add(SimpleRNN(10, activation="relu", return_sequences=False, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
-    rnn_cla_model.add(Dropout(0.2))
+    rnn_cla_model.add(LSTM(10, activation="relu", return_sequences=False, kernel_regularizer=regularizers.l1_l2(l1=0.01, l2=0.01)))
+    # rnn_cla_model.add(Dropout(0.2))
 
     # rnn_cla_model.add(Dense(len(label_sequence[0]), activation='relu'))
     rnn_cla_model.add(Dense(len(label_sequence[0]), activation='linear'))
 
-    rnn_cla_model.compile(loss=RelativeErrorLoss(), optimizer=Adam(), metrics=['mae'])
+    # rnn_cla_model.compile(loss=WeightedMAELoss(weight_increase_rate=1.05), optimizer=Adam(), metrics=['mae'])
+    rnn_cla_model.compile(loss='mae', optimizer=Adam(), metrics=['mae'])
 
 
     x_train=np.array(x_train, dtype=object)
