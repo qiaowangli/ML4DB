@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/Users/royli/miniforge3/envs/pytorch_m1/bin/python3
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
@@ -105,3 +106,4 @@ def word_embedding(tokenized_subsequence, lookup_table_dict_length,window_size=3
     return word2vec.get_layer('w2v_embedding').get_weights()[0]
 
 #reference: https://www.tensorflow.org/api_docs/python/tf/keras/preprocessing/sequence/skipgrams
+

@@ -1,14 +1,158 @@
-#!/Users/royli/miniforge3/envs/tensorflow_m1/bin/python3
 import re
 import time
 import numpy as np
+import pandas as pd
 from datetime import datetime
+import matplotlib.pyplot as plt
+from cluster import kmean_cluster, Dbscan_cluster
+from sklearn.model_selection import train_test_split
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.cluster import DBSCAN
+from sklearn.cluster import OPTICS
+from collections import Counter
+import matplotlib.pyplot as plt
+import random
+import math
+from collections import Counter
 
 
-""" GLOBAL VARIABLE """
 
 
-def raw_data_processor(log_path,template_storage,sequence_storage,template_index,duration_time,splitting_mode="time",predict_interval=5):
+def extract_stable_top_rank(inputList, observation_slot = 1000, TOP_RANK = 10):
+    # print(count_element_frequency_in_2d_list(inputList[0]))
+    # The return is a set, where the length of set is TOP_RANK
+
+    result_dict = {element: 0 for sublist in inputList for subsubList in sublist for element in subsubList}
+
+    observation_slot = observation_slot if observation_slot <= len(inputList) else len(inputList)
+    for sublist in inputList[:observation_slot]:
+        for subsubList in sublist:
+            for element in subsubList:
+                result_dict[element] += 1
+
+    TOP_RANK = TOP_RANK if TOP_RANK <= len(result_dict) else len(result_dict)
+    return sorted(result_dict, key=lambda x: int(result_dict[x]), reverse=True)[:TOP_RANK]
+    
+
+
+
+
+def split_list_into_chunks(A, k, stepK = True):
+    if k <= 0 or not isinstance(k, int):
+        raise ValueError("k must be a positive integer")
+
+    if len(A) < k:
+        raise ValueError("k must be less than or equal to the length of the input list")
+    
+    if stepK:
+        A = A.tolist()  # Convert the Pandas Series to a Python list
+
+    result = [A[i:i + k] for i in range(len(A) - k + 1)]
+
+    if stepK:
+        return result, set(A)
+    else:
+        return result
+
+
+
+def count_element_frequency_in_2d_list(A):
+
+    result_dict = {element: [] for sublist in A for element in sublist}
+
+    keys_list = list(result_dict.keys())
+
+    for lst in A:
+        for element in keys_list:
+                result_dict[element].append(lst.count(element))
+    return result_dict
+
+
+
+
+
+
+def analyze_top_keys_variation(data_list, TOP_RANK):
+
+    TOP_RANK = TOP_RANK
+    variations = []
+    resList = []
+
+    for data in data_list:
+        input_dict = count_element_frequency_in_2d_list(data)
+        top_5_keys = sorted(input_dict, key=lambda x: sum(input_dict[x]), reverse=True)[:TOP_RANK]
+        
+        if variations:
+            common_keys = set(variations[-1]).intersection(top_5_keys)
+            # print(common_keys)
+            variation_count = TOP_RANK - len(common_keys)
+        else:
+            variation_count = 0
+
+        variations.append(top_5_keys)
+        resList.append(variation_count)
+
+        # print("Top 5 Keys:", top_5_keys)
+        print("Variation Count:", variation_count)
+        print("---------------------------------")
+    
+    x_axis = range(1, len(data_list) + 1)
+    plt.plot(x_axis, resList, marker='o')
+    plt.xlabel('Data Group')
+    plt.ylabel('Top  Keys Variation Count')
+    plt.title('Top {} Keys Variation in {} Groups'.format(TOP_RANK, len(data_list)))
+    plt.show()
+
+
+def create_NN_input(data_list, TOP_RANK):
+
+    TOP_RANK = TOP_RANK
+    singleTreatment = []
+    returnList = []
+
+    for data in data_list:
+        input_dict = count_element_frequency_in_2d_list(data)
+        top_keys = sorted(input_dict, key=lambda x: sum(input_dict[x]), reverse=True)[:TOP_RANK]
+        singleTreatment = []
+        for singleVector in data:
+            tmpList = []
+            for top_key in top_keys:
+                tmpList.append(singleVector.count(top_key))
+            while len(tmpList) < TOP_RANK:
+                tmpList.append(0)
+            singleTreatment.append(tmpList)
+        returnList.append(singleTreatment) 
+    return returnList
+
+
+def create_NN_input_with_constant_TOP_RANK(data_list, TOP_RANK):
+    top_keys = extract_stable_top_rank(data_list, 10000, TOP_RANK)
+    top_keys_set = set(top_keys)
+
+    singleTreatment = []
+    returnList = []
+
+    for data in data_list:
+        singleTreatment = []
+        for singleVector in data:
+            # tmpList = []
+            vector_counter = Counter(singleVector) 
+            tmpList = [vector_counter[key] for key in top_keys if key in top_keys_set]
+            # for top_key in top_keys:
+            #     tmpList.append(singleVector.count(top_key))
+            singleTreatment.append(tmpList)
+        returnList.append(singleTreatment) 
+    return returnList
+
+
+
+            
+        
+
+def raw_data_processor(log_path, K, G, TOP_RANK, isASmallTest):
     """
     @input parameters:  log_path         -> log_file path
                         splitting_mode   -> splitting_mode decides the way to split the queries
@@ -19,185 +163,64 @@ def raw_data_processor(log_path,template_storage,sequence_storage,template_index
     """
     vaild_query_type=['select', 'SELECT', 'INSERT', 'insert', 'UPDATE', 'update', 'delete', 'DELETE']
 
-    log_file=open(log_path,"r")
-    if not template_storage and not sequence_storage:
-        pass
-        # template_storage={} # dictionary contains all distint queries and their distint ID.
-        # sequence_storage={} # dictionary contains a set of timestamps, where each timestamp records the frequency of query IDs executed during the timestamp period.
-        # template_index=0 
-    if splitting_mode =="time":
-        # we first get the starting date-time of the log file
-        """
-        Below command is for pgbench data processing
-        """
-        tracking_timestamp=float(log_file.readline().split('LOG:')[0].split(' ')[0])
-        """
-        Below command is for github data processing
-        """
-        # try:
-        #     tracking_timestamp=int(datetime.strptime(log_file.readline().split('statement')[0].split(' EST')[0], "\"%Y-%m-%d %H:%M:%S.%f").timestamp()*1000)
-        # except:
-        #     print("invaild file, skip it")
-        #     exit()
+    dataSet = pd.read_csv(log_path)
+    print(len(dataSet))
+    ########################################################################################################################
 
-        # we create the dic for the first timestamp
-        sequence_storage[tracking_timestamp]={}
-    elif splitting_mode =="query":
-        query_group_index=0
-        sequence_storage[query_group_index]={}
-    else:
-        print("Invalid splitting_mode, the system only supports 'time' and 'query' feature")
-        exit(-1)
-    
+    # Step 1: Extract 'duration' and 'statement' columns
+    extracted_data = dataSet['message'].str.extract(r'duration:\s*(\d+(\.\d+)?)\s+ms\s+execute(.*)', expand=True)
+    dataSet['duration'] = extracted_data[0].fillna(0)
+    dataSet['statement'] = extracted_data[2].fillna("MARKER")
 
-    for line in log_file:
-        try:
-            """
-            Below command is for pgbench data processing
-            """
-            query_timestamp=float(line.split('LOG:')[0].split(' ')[0])
-            template_query=re.findall(r"^duration:(.*)ms. statement: (.*)\n",line.split(' LOG:  ')[1])
-            """
-            Below command is for github data processing
-            """
-            # query_timestamp=int(datetime.strptime(line.split('statement')[0].split(' EST')[0], "\"%Y-%m-%d %H:%M:%S.%f").timestamp()*1000)
-            # template_query=re.findall(r"\"statement: (.*) \"",line)
-        except:
-            continue
+    # Step 2: Convert 'duration' to float and replace NaN with -1
+    dataSet['duration'] = dataSet['duration'].astype(float)
 
-        if splitting_mode == "time" and query_timestamp not in sequence_storage and query_timestamp > tracking_timestamp+predict_interval:
-            sequence_storage[query_timestamp]={}
-            tracking_timestamp=query_timestamp
-        elif splitting_mode == "query" and sum(sequence_storage[query_group_index].values()) > predict_interval:
-            query_group_index+=1
-            sequence_storage[query_group_index]={} # create a new dictionary
+    # Step 3: Create 'discrete_duration' column using pd.cut()
+    bins = [-2, 0, 500, 900, dataSet['duration'].max()]
+    # print(dataSet['duration'].max())
+    labels = ["C-1", "C1", "C2", "C3"]
+    dataSet['discrete_duration'] = pd.cut(dataSet['duration'], bins=bins, labels=labels)
 
-        """
-        The if statement should change to 
-        " if template_query and template_query[0].split(" ")[0] in vaild_query_type: "
-        with github dataset
-        """
-        if template_query and template_query[0][1].split(" ")[0] in vaild_query_type:
+    # Step 4: Create 'template' column by combining 'discrete_duration' and 'statement'
+    dataSet['template'] = dataSet['discrete_duration'].astype(str) + "<CHECKMARK>" + dataSet['statement'].astype(str)
 
-            duration_number = float( template_query[0][0])
-            duration_time.append(duration_number)
-            tier_level=None 
-            if duration_number > 0.1:
-                tier_level = "tier_10_"
-            else:
-                tier_level= "tier_"+str(int(duration_number*100)%10)+"_"
-            """ The following code is used to test the effect of the length of the input vector on the accuracy """
-            # if duration_number > 0.6:
-            #     tier_level = "tier_0_"
-            # elif duration_number > 0.3:
-            #     tier_level = "tier_1_"
-            # else:
-            #     tier_level = "tier_2_"
+    ########################################################################################################################
+    # New approach starting here
+    ########################################################################################################################
 
-            """
-            The if statement checks if this is a valid query template we want.
-            """
-            new_template=re.sub('\d+', r'$$$', template_query[0][1])
-            new_template=re.sub("\s+", r' ', new_template)
-            new_template=re.sub("'(.*)'", r"'$$$'", new_template) 
-            # concate duration level and query template
-            new_template = tier_level + new_template
+    # HYPER PARAMETER
 
-            # print(new_template)
-            # check if this is a new template
-            if new_template not in template_storage:
-                template_storage[new_template]=template_index
-                template_index+=1
-            # the variable 'interval_id' is used to identify which sub_dictionary the system is working with.
-            interval_id=tracking_timestamp if splitting_mode == "time" else query_group_index
-
-            #record the queries 
-            if template_storage[new_template] not in sequence_storage[interval_id]:
-                sequence_storage[interval_id][template_storage[new_template]]=1
-            else:
-                sequence_storage[interval_id][template_storage[new_template]]+=1
+    A_slash, fre_hashTable = split_list_into_chunks(dataSet['template'], K)
+    A_slash_slash = split_list_into_chunks(A_slash, G, False)
 
 
-    return template_storage,sequence_storage,template_index,duration_time
+    # analyze_top_keys_variation(A_slash_slash, 100)
 
-def sequence_producer(templates_num,sequence_storage):
+    """ 
+    we now extract the tranning test from A_slash_slash
+
+    The output is a 3D list -> [ [   [A single vector where length = TOP_RANK]   ] <- A single dataset for RNN where length = G       ]
     """
-    This function aims to convert the a dictonary to a set of sequences, then we can think of it as a time series problem
+    # if isASmallTest:
+        # return create_NN_input(A_slash_slash[:2000],TOP_RANK)
+    # else:
+    #     return create_NN_input(A_slash_slash,TOP_RANK)
 
-    @input parameters : templates_num    -> the total numbers of distint template.
-                        sequence_storage -> A dictionary contains a set of timestamps, where each timestamp records the frequency of query IDs executed during the timestamp period.
-    
-    @output: sequence_list -> a set of sequences for time series problem.
-    """
-    sequence_list=[]
-    for timestamp in sorted(sequence_storage):
-        sub_sequence=[0]*templates_num
-        if sequence_storage[timestamp]:
-            for id in sequence_storage[timestamp]:
-                sub_sequence[id]=sequence_storage[timestamp][id]
-        sequence_list.append(sub_sequence)
-    return sequence_list
+    # return create_NN_input(A_slash_slash[:2000],TOP_RANK)
 
 
-def nn_setup(sequence_list,time_step=10,skipgram=False,new_approach=False):
-    """
-    time_step indicates the step wise of RNN, if time_step is 1, the function generates the dataset for FNN.
-    """
+    # return create_NN_input(A_slash_slash,TOP_RANK)
+    return create_NN_input_with_constant_TOP_RANK(A_slash_slash,TOP_RANK)
+
+
+
+def nn_setup(sequence_list):
+
     feature_sequences=[]
     label_sequence=[]
-    total_sequence=[]
-    ending_point=0
-    if not skipgram:  
-        while ending_point+time_step <= len(sequence_list)-1:
-            feature_sequences.append(sequence_list[ending_point:ending_point+time_step]) if time_step!=1 else feature_sequences.append(sequence_list[ending_point])
-            if not new_approach:
-                label_sequence.append(sequence_list[ending_point+time_step])
-            else:
-                label_sequence.append(ending_point+time_step)# we just record the index for further usage
-            total_sequence.append(sequence_list[ending_point:ending_point+time_step+1])
-            ending_point+=1
-
-    return feature_sequences, label_sequence,total_sequence
-
-def generate_training_data(feature_sequences, label_sequences,embedding_table,tokenized_sequence_list_target,classification_task=False, new_approach=False):
-    # print(type(embedding_table))
-    embedding_feature_sequences=[]
-    embedding_label_sequences=[]
-    for index in range(len(label_sequences)):
-        if not classification_task:
-            embedding_label_sequences.append(embedding_table[label_sequences[index]])
-        else:
-            if new_approach:
-                label_layer_length=len(set(tokenized_sequence_list_target))
-                # print(tokenized_sequence_list_target[label_sequences[index]])
-                # print(label_layer_length)
-                embedding_label_sequences.append(np.eye(label_layer_length)[tokenized_sequence_list_target[label_sequences[index]]])
-            else:
-                embedding_label_sequences.append(np.eye(len(embedding_table))[label_sequences[index]])
-        sub_list=[]
-        for senario in feature_sequences[index]:
-            sub_list.append(embedding_table[senario])
-        embedding_feature_sequences.append(sub_list)
-    return embedding_feature_sequences,embedding_label_sequences
-
-
-
-def tokenization(sequence_list):
-    """
-    input : sequence_list -> [[s1],[s2],[s3],[s4] ....,[sn]] where sn is prediction vector
-    output: tokenized sequence_list -> [1,2,3,2,3,....,678] and a look_up table -> {[s1]:0,[s2]:1,[s3]:2,[s4]:3 ....,[sn]:n-1}
-    """
-    lookup_table={}
-    tokenized_sequence_list=[]
-    index=0
-    for predicton_vector in sequence_list:
-        if predicton_vector not in lookup_table.values():
-            lookup_table[index]=predicton_vector
-            tokenized_sequence_list.append(index)
-            index+=1
-        else:
-            # each key must have a unique value
-            tokenized_sequence_list.append(list(lookup_table.keys())[list(lookup_table.values()).index(predicton_vector)])
-    return tokenized_sequence_list,lookup_table
-
-
+    for subList in sequence_list:
+        feature_sequences.append(subList[:len(subList)-1])
+        label_sequence.append(subList[-1])
+    return feature_sequences, label_sequence
+    
+            
